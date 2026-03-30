@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CSP Cutting Solution Platform{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .header { background: #2c3e50; color: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center; }
+        .header h1 { font-size: 1.5rem; }
+        .header-user { font-size:.9rem; color:#bdc3c7; }
+        .nav { background: #34495e; padding: 0.5rem 2rem; display:flex; justify-content:space-between; align-items:center; }
+        .nav-left a { color: white; text-decoration: none; margin-right: 2rem; padding: 0.5rem 1rem; display: inline-block; }
+        .nav-left a:hover { background: #2c3e50; border-radius: 4px; }
+        .nav-right a { color: #bdc3c7; text-decoration: none; margin-left: 1.5rem; padding: 0.4rem 0.9rem; font-size:.9rem; display: inline-block; border-radius:4px; }
+        .nav-right a:hover { background: #2c3e50; color:white; }
+        .nav-right a.settings-link { color: #f39c12; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+        .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .status { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem; font-weight: 600; }
+        .status.pending { background: #ffeaa7; color: #2d3436; }
+        .status.processing { background: #74b9ff; color: #2d3436; }
+        .status.completed { background: #55efc4; color: #2d3436; }
+        .status.failed { background: #ff7675; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .btn { padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #2980b9; }
+        .cutting-bar { height: 40px; background: #95a5a6; position: relative; margin: 1rem 0; border-radius: 4px; overflow: hidden; }
+        .cut-segment { height: 100%; float: left; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: bold; }
+        .waste { background: #e74c3c !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✂️ CSP – Cutting Solution Platform</h1>
+        <div class="header-user">
+            {% if current_user is defined and current_user %}
+                Ingelogd als <strong>{{ current_user.username }}</strong>
+            {% endif %}
+        </div>
+    </div>
+    <div class="nav">
+        <div class="nav-left">
+            {% if current_user is defined and current_user %}
+                <a href="/">Dashboard</a>
+                <a href="/cutting-plans">Zaagplannen</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            {% if current_user is defined and current_user %}
+                <a href="/settings" class="settings-link">⚙️ Instellingen</a>
+                <a href="/logout">Uitloggen</a>
+            {% else %}
+                <a href="/login">Inloggen</a>
+                <a href="/register">Registreren</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

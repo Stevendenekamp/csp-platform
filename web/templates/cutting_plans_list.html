@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+
+{% block title %}Zaagplannen{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Alle Zaagplannen</h2>
+    <p>Overzicht van alle geoptimaliseerde zaagplannen.</p>
+</div>
+
+<div class="card">
+    {% if plans %}
+    <table>
+        <thead>
+            <tr>
+                <th>Plan ID</th>
+                <th>Order ID</th>
+                <th>Artikel</th>
+                <th>Status</th>
+                <th>Voorraad stuks</th>
+                <th>Afval %</th>
+                <th>Aangemaakt</th>
+                <th>Actie</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for plan in plans %}
+            <tr>
+                <td>{{ plan.id }}</td>
+                <td>{{ plan.order.order_id if plan.order else '-' }}</td>
+                <td>{{ plan.order.article_code if plan.order else '-' }}</td>
+                <td><span class="status {{ plan.status.value }}">{{ plan.status.value }}</span></td>
+                <td>{{ plan.total_stock_used or '-' }}</td>
+                <td>{{ "%.2f"|format(plan.waste_percentage) if plan.waste_percentage else '-' }}%</td>
+                <td>{{ plan.created_at.strftime("%d-%m-%Y %H:%M") if plan.created_at else '-' }}</td>
+                <td><a href="/cutting-plans/{{ plan.order_id }}" class="btn">Bekijk</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Geen zaagplannen gevonden.</p>
+    {% endif %}
+</div>
+{% endblock %}

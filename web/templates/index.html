@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>Dashboard</h2>
+    <p>Welkom bij CSP – Cutting Solution Platform</p>
+</div>
+
+<div class="card">
+    <h3>Statistieken</h3>
+    <table>
+        <tr>
+            <th>Totaal Orders</th>
+            <th>In Behandeling</th>
+            <th>Voltooid</th>
+            <th>Mislukt</th>
+        </tr>
+        <tr>
+            <td>{{ stats.total_orders }}</td>
+            <td>{{ stats.processing }}</td>
+            <td>{{ stats.completed }}</td>
+            <td>{{ stats.failed }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Recente Zaagplannen</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Artikel</th>
+                <th>Status</th>
+                <th>Voorraad Gebruikt</th>
+                <th>Afval %</th>
+                <th>Acties</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for plan in recent_plans %}
+            <tr>
+                <td>{{ plan.order.order_id }}</td>
+                <td>{{ plan.order.article_code }}</td>
+                <td><span class="status {{ plan.status.value }}">{{ plan.status.value }}</span></td>
+                <td>{{ plan.total_stock_used or '-' }}</td>
+                <td>{{ "%.2f"|format(plan.waste_percentage) if plan.waste_percentage else '-' }}%</td>
+                <td><a href="/cutting-plans/{{ plan.order_id }}" class="btn">Bekijk</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

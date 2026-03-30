@@ -1,0 +1,29 @@
+import uvicorn
+from pyngrok import ngrok
+import logging
+from config import get_settings
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def start_with_ngrok():
+    settings = get_settings()
+    
+    # Start ngrok tunnel
+    logger.info("Starting ngrok tunnel...")
+    public_url = ngrok.connect(settings.port)
+    logger.info(f"✓ Ngrok tunnel established!")
+    logger.info(f"✓ Public URL: {public_url}")
+    logger.info(f"✓ Webhook URL: {public_url}/api/webhook/mkg")
+    logger.info(f"✓ Local URL: http://localhost:{settings.port}")
+    
+    # Start FastAPI
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug
+    )
+
+if __name__ == "__main__":
+    start_with_ngrok()

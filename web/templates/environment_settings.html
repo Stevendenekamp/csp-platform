@@ -1,0 +1,139 @@
+{% extends "layout.html" %}
+
+{% block title %}Omgevingsinstellingen{% endblock %}
+
+{% block content %}
+<div style="max-width: 680px; margin: 0 auto;">
+
+    {% if saved %}
+    <div style="background:#d4edda;color:#155724;padding:0.85rem 1rem;border-radius:4px;margin-bottom:1.25rem;border-left:4px solid #28a745;">
+        ✅ Instellingen opgeslagen.
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div style="background:#ffeaea;color:#c0392b;padding:0.85rem 1rem;border-radius:4px;margin-bottom:1.25rem;border-left:4px solid #e74c3c;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- MKG Environment Settings -->
+    <div class="card">
+        <h2 style="margin-bottom:.4rem;color:#2c3e50;">MKG Omgevingsinstellingen</h2>
+        <p style="color:#777;margin-bottom:1.5rem;font-size:.95rem;">
+            Koppel uw MKG ERP-omgeving. Credentials worden versleuteld opgeslagen.
+        </p>
+
+        <form method="post" action="/settings">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Base URL</label>
+                    <input type="url" name="mkg_base_url" value="{{ env.mkg_base_url or '' }}"
+                        placeholder="https://uw-mkg-server.nl"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                    <small style="color:#999;">Basis-URL van uw MKG installatie (zonder pad)</small>
+                </div>
+
+                <div>
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Context pad</label>
+                    <input type="text" name="mkg_context_path" value="{{ env.mkg_context_path or '/mkg' }}"
+                        placeholder="/mkg"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                </div>
+
+                <div>
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">API Key (X-CustomerID)</label>
+                    <input type="text" name="mkg_api_key" value="{{ env.mkg_api_key or '' }}"
+                        placeholder="uw-api-key"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                </div>
+
+                <div>
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Gebruikersnaam</label>
+                    <input type="text" name="mkg_username" value="{{ env.mkg_username or '' }}"
+                        placeholder="mkg_gebruiker"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                </div>
+
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Wachtwoord</label>
+                    <input type="password" name="mkg_password"
+                        placeholder="{% if env.mkg_password_enc %}Wachtwoord opgeslagen — laat leeg om ongewijzigd te laten{% else %}Voer wachtwoord in{% endif %}"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                    <small style="color:#999;">Laat leeg om het huidige wachtwoord te behouden</small>
+                </div>
+
+                <div>
+                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Standaard staaflengte (mm)</label>
+                    <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}"
+                        min="100" step="1"
+                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                </div>
+
+                <div style="display:flex;align-items:center;gap:.75rem;padding-top:1.5rem;">
+                    <input type="checkbox" name="use_mkg" id="use_mkg" value="true"
+                        {% if env.use_mkg %}checked{% endif %}
+                        style="width:18px;height:18px;cursor:pointer;">
+                    <label for="use_mkg" style="font-weight:600;color:#555;cursor:pointer;">
+                        Echte MKG data gebruiken
+                    </label>
+                </div>
+            </div>
+
+            <div style="margin-top:1.75rem;display:flex;gap:1rem;">
+                <button type="submit" class="btn" style="padding:.7rem 2rem;">
+                    Opslaan
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Webhook URL -->
+    <div class="card" style="margin-top:1rem;">
+        <h3 style="margin-bottom:.5rem;color:#2c3e50;">Webhook URL</h3>
+        <p style="color:#777;font-size:.95rem;margin-bottom:1rem;">
+            Configureer deze URL als webhook-doel in MKG. De URL is uniek voor uw omgeving.
+        </p>
+
+        <div style="background:#f8f9fa;padding:1rem;border-radius:4px;border:1px solid #dee2e6;word-break:break-all;font-family:monospace;font-size:.9rem;">
+            {{ webhook_url }}
+        </div>
+
+        <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+            <button onclick="copyWebhook()" class="btn" style="background:#27ae60;">
+                📋 Kopieer URL
+            </button>
+            <form method="post" action="/settings/regen-webhook" style="display:inline;">
+                <button type="submit" class="btn" style="background:#e67e22;"
+                    onclick="return confirm('Weet u zeker dat u een nieuwe webhook-token wilt genereren? De oude URL werkt dan niet meer.')">
+                    🔄 Nieuwe token genereren
+                </button>
+            </form>
+        </div>
+
+        <p style="color:#e67e22;font-size:.85rem;margin-top:.75rem;">
+            ⚠️ Bewaar de token geheim. Iedereen met deze URL kan orders aanmaken in uw omgeving.
+        </p>
+    </div>
+
+    <!-- Account info -->
+    <div class="card" style="margin-top:1rem;">
+        <h3 style="margin-bottom:.5rem;">Account</h3>
+        <table style="width:auto;">
+            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">Naam</th><td>{{ current_user.username }}</td></tr>
+            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">E-mail</th><td>{{ current_user.email }}</td></tr>
+            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">Lid sinds</th><td>{{ current_user.created_at.strftime('%d-%m-%Y') }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<script>
+function copyWebhook() {
+    const url = "{{ webhook_url }}";
+    navigator.clipboard.writeText(url).then(() => {
+        alert("Webhook URL gekopieerd!");
+    });
+}
+</script>
+{% endblock %}

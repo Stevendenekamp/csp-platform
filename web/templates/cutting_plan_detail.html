@@ -1,0 +1,408 @@
+{% extends "layout.html" %}
+
+{% block title %}Zaagplan - Order {{ order.order_id }}{% endblock %}
+
+{% block content %}
+<style>
+  /* ── layout ───────────────────────────────────────── */
+  .op-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
+  .op-header h2 { font-size:1.8rem; margin:0; }
+  .op-meta { display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:.5rem; }
+  .op-meta span { font-size:1rem; color:#555; }
+  .op-meta strong { color:#222; }
+
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin-bottom:.5rem; }
+  .summary-tile { background:#f0f4ff; border-radius:8px; padding:1rem 1.25rem; text-align:center; border:1px solid #d0d8f0; }
+  .summary-tile .val { font-size:2rem; font-weight:700; color:#2c3e50; }
+  .summary-tile .lbl { font-size:.8rem; color:#666; margin-top:.25rem; }
+
+  /* ── legend ───────────────────────────────────────── */
+  .legend { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; }
+  .legend-item { display:flex; align-items:center; gap:.4rem; font-size:.85rem; }
+  .legend-dot { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
+
+  /* ── stock cards ──────────────────────────────────── */
+  .stock-card { background:white; border-radius:10px; padding:1.5rem; margin-bottom:1.5rem;
+    box-shadow:0 2px 6px rgba(0,0,0,.1); border-left:6px solid #3498db; }
+  .stock-card.done { border-left-color:#27ae60; opacity:.75; }
+  .stock-title { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+  .stock-num { background:#3498db; color:white; font-size:1.4rem; font-weight:700;
+    width:2.5rem; height:2.5rem; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .stock-title h3 { font-size:1.2rem; margin:0; }
+  .eff-badge { margin-left:auto; font-size:.85rem; font-weight:600; padding:.25rem .75rem;
+    border-radius:12px; background:#eafaf1; color:#27ae60; border:1px solid #abebc6; }
+  .eff-badge.warn { background:#fef9e7; color:#d68910; border-color:#f9e79f; }
+
+  /* ── visual bar ───────────────────────────────────── */
+  .cut-bar { display:flex; height:52px; border-radius:6px; overflow:hidden;
+    border:1px solid #ccc; width:100%; margin-bottom:1rem; }
+  .cut-seg {
+    height:100%; display:flex; align-items:center; justify-content:center;
+    color:white; font-size:.8rem; font-weight:700;
+    cursor:default; position:relative;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;
+    border-right:2px solid rgba(255,255,255,0.55);
+    box-sizing:border-box;
+  }
+  .cut-seg:last-child { border-right:none; }
+  .cut-seg.waste-seg {
+    background:repeating-linear-gradient(45deg,#c0392b,#c0392b 6px,#e74c3c 6px,#e74c3c 12px) !important;
+    color:white; font-size:.75rem; border-right:none;
+  }
+  .cut-seg .tip {
+    visibility:hidden; opacity:0; pointer-events:none;
+    position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%);
+    background:#2c3e50; color:white; padding:.4rem .75rem; border-radius:6px;
+    font-size:.85rem; white-space:nowrap; z-index:20; transition:opacity .15s; line-height:1.5;
+  }
+  .cut-seg:hover .tip { visibility:visible; opacity:1; }
+
+  /* ── collapsible cut groups ───────────────────────── */
+  .cut-group-header {
+    display:flex; align-items:center; gap:.75rem;
+    padding:.6rem .9rem; cursor:pointer; border-radius:6px;
+    background:#f4f6f8; border:1px solid #e0e4ea;
+    margin-bottom:2px; user-select:none;
+  }
+  .cut-group-header:hover { background:#e8ecf1; }
+  .cut-group-toggle { font-size:.8rem; color:#888; transition:transform .2s; flex-shrink:0; }
+  .cut-group-toggle.open { transform:rotate(90deg); }
+  .cut-group-count { font-size:.85rem; color:#555; margin-left:auto; }
+  .cut-group-body { display:none; }
+  .cut-group-body.open { display:table-row-group; }
+
+  .cut-table { width:100%; border-collapse:collapse; margin-top:.5rem; }
+  .cut-table th { background:#2c3e50; color:white; padding:.6rem 1rem; text-align:left; font-size:.9rem; }
+  .cut-table td { padding:.6rem 1rem; border-bottom:1px solid #eee; font-size:1rem; }
+  .cut-nr { width:2.3rem; height:2.3rem; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center;
+    color:white; font-weight:700; font-size:.85rem; }
+  .len-big { font-size:1.15rem; font-weight:700; color:#2c3e50; }
+  .cb-done { width:1.3rem; height:1.3rem; cursor:pointer; accent-color:#27ae60; }
+  .cb-group { width:1.3rem; height:1.3rem; cursor:pointer; accent-color:#27ae60; }
+  .row-done td { text-decoration:line-through; color:#aaa; }
+  .group-done .cut-group-header { opacity:.6; }
+
+  /* ── pivot table ──────────────────────────────────── */
+  .pivot-table { width:100%; border-collapse:collapse; margin-top:.75rem; font-size:.92rem; }
+  .pivot-table th { background:#34495e; color:white; padding:.55rem .9rem; text-align:left; }
+  .pivot-table td { padding:.55rem .9rem; border-bottom:1px solid #eee; vertical-align:top; }
+  .pivot-table tr:hover td { background:#f8f9fa; }
+  .bar-pill {
+    display:inline-flex; align-items:center; justify-content:center;
+    background:#3498db; color:white; border-radius:6px;
+    font-size:.75rem; font-weight:700; height:1.6rem; padding:0 .5rem; margin:1px;
+    white-space:nowrap;
+  }
+
+  /* ── misc ─────────────────────────────────────────── */
+  .btn-print { background:#2c3e50; color:white; border:none; padding:.6rem 1.4rem;
+    border-radius:6px; cursor:pointer; font-size:.95rem; display:inline-block; }
+  .btn-print:hover { background:#1a252f; }
+  .progress-bar-wrap { background:#eee; border-radius:999px; height:12px; overflow:hidden; margin-top:.5rem; }
+  .progress-bar-fill { height:100%; background:#27ae60; border-radius:999px; transition:width .3s; }
+  @media print {
+    .nav, .btn-print, .cb-done, .cb-group { display:none; }
+    .stock-card { page-break-inside:avoid; box-shadow:none; border:1px solid #ccc; }
+    .cut-group-body { display:table-row-group !important; }
+  }
+</style>
+
+{# ── Kleurenpalet per materiaalregel (original_index) ── #}
+{% set PALETTE = ["#2980b9","#8e44ad","#16a085","#d35400","#27ae60","#c0392b","#1abc9c","#e67e22","#6c5ce7","#e84393","#0984e3","#636e72"] %}
+
+{# ── Header ────────────────────────────────────────────── #}
+<div class="card">
+  <div class="op-header">
+    <div>
+      <h2>Zaagplan &mdash; Order <strong>{{ order.order_id }}</strong></h2>
+      <div class="op-meta">
+        <span><strong>Artikel:</strong> {{ order.article_code }}</span>
+        <span><strong>Voorraad lengte:</strong> {{ order.stock_length | int }} mm</span>
+        <span><strong>Status:</strong> <span class="status {{ plan.status.value }}">{{ plan.status.value }}</span></span>
+        <span><strong>Aangemaakt:</strong> {{ plan.created_at.strftime("%d-%m-%Y %H:%M:%S") if plan.created_at else '-' }}</span>
+      </div>
+    </div>
+    <button class="btn-print" onclick="window.print()">Afdrukken</button>
+  </div>
+</div>
+
+{% if plan.optimization_data %}
+
+{# ── Samenvatting ──────────────────────────────────────── #}
+<div class="card">
+  <div class="summary-grid">
+    <div class="summary-tile"><div class="val">{{ plan.total_stock_used }}</div><div class="lbl">Staven nodig</div></div>
+    <div class="summary-tile"><div class="val">{{ plan.optimization_data.summary.total_pieces }}</div><div class="lbl">Totaal stukken</div></div>
+    <div class="summary-tile"><div class="val">{{ "%.1f"|format(plan.optimization_data.summary.average_efficiency) }}%</div><div class="lbl">Gem. efficientie</div></div>
+    <div class="summary-tile"><div class="val">{{ "%.0f"|format(plan.total_waste) }} mm</div><div class="lbl">Totaal afval</div></div>
+  </div>
+  <div style="font-size:.9rem;color:#555;margin-top:.5rem;">Zaagvoortgang (vink stukken af)</div>
+  <div class="progress-bar-wrap"><div class="progress-bar-fill" id="global-progress" style="width:0%"></div></div>
+  <div id="progress-label" style="font-size:.85rem;color:#555;margin-top:.3rem;">0 / <span id="total-cuts">0</span> stukken gezaagd</div>
+</div>
+
+{# ── Kleurenlegenda ────────────────────────────────────── #}
+<div class="card" style="padding:1rem 1.5rem;">
+  <strong style="display:block;margin-bottom:.6rem;">Legenda materiaalregels</strong>
+  <div class="legend">
+    {% for line in order.material_lines %}
+    {% set color = PALETTE[loop.index0 % PALETTE|length] %}
+    <div class="legend-item">
+      <div class="legend-dot" style="background:{{ color }};"></div>
+      <span>Regel {{ line.line_number }}&nbsp;&mdash;&nbsp;{{ line.required_length | int }} mm{% if line.description %} ({{ line.description }}){% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Per staaf: visuele balk + gegroepeerde klaptabel ─── #}
+{% for stock in plan.optimization_data.cutting_plan %}
+<div class="stock-card" id="card-{{ stock.stock_number }}">
+  <div class="stock-title">
+    <div class="stock-num">{{ stock.stock_number }}</div>
+    <h3>Staaf {{ stock.stock_number }} &mdash; {{ order.stock_length | int }} mm</h3>
+    <span class="eff-badge {% if stock.efficiency < 80 %}warn{% endif %}">{{ "%.1f"|format(stock.efficiency) }}% benut</span>
+  </div>
+
+  {# visuele balk - mouseover toont order + lengte #}
+  <div class="cut-bar">
+    {% for cut in stock.cuts %}
+    {% set color = PALETTE[cut.original_index % PALETTE|length] %}
+    {% set mat_line = order.material_lines[cut.original_index] %}
+    <div class="cut-seg" style="width:{{ (cut.length / order.stock_length * 100)|round(2) }}%; background:{{ color }};">
+      <span class="tip">
+        Order: <strong>{{ order.order_id }}</strong><br>
+        Regel {{ mat_line.line_number }}: <strong>{{ cut.length | int }} mm</strong>{% if mat_line.description %}<br>{{ mat_line.description }}{% endif %}
+      </span>
+      {% if (cut.length / order.stock_length * 100) > 7 %}{{ cut.length | int }}{% endif %}
+    </div>
+    {% endfor %}
+    {% if stock.waste > 0 %}
+    <div class="cut-seg waste-seg" style="width:{{ (stock.waste / order.stock_length * 100)|round(2) }}%;">
+      <span class="tip">Afval: {{ stock.waste | int }} mm</span>
+      {% if (stock.waste / order.stock_length * 100) > 5 %}{{ stock.waste | int }} afval{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {# tabel gegroepeerd per materiaalregel, standaard dichtgeklapt #}
+  <table class="cut-table">
+    <thead>
+      <tr>
+        <th colspan="2">Materiaalregel</th>
+        <th>Lengte</th>
+        <th>Positie</th>
+        <th style="width:5rem">Gezaagd</th>
+      </tr>
+    </thead>
+    {% for line in order.material_lines %}
+    {% set line_idx = loop.index0 %}
+    {% set color = PALETTE[line_idx % PALETTE|length] %}
+    {% set cnt = namespace(c=0) %}
+    {% for cut in stock.cuts %}{% if cut.original_index == line_idx %}{% set cnt.c = cnt.c + 1 %}{% endif %}{% endfor %}
+    {% if cnt.c > 0 %}
+    {% set group_id = "g-" ~ stock.stock_number ~ "-" ~ line_idx %}
+    {# groep-header rij (klikbaar, altijd zichtbaar) #}
+    <tbody>
+      <tr class="cut-group-header" onclick="toggleGroup('{{ group_id }}')" id="hdr-{{ group_id }}">
+        <td style="width:2rem; padding:.6rem .5rem .6rem 1rem;">
+          <span class="cut-group-toggle" id="arr-{{ group_id }}">&#9654;</span>
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:.6rem;">
+            <div class="legend-dot" style="background:{{ color }};"></div>
+            <span style="font-weight:600;">Regel {{ line.line_number }}</span>
+            {% if line.description %}<span style="color:#777;font-size:.85rem;">{{ line.description }}</span>{% endif %}
+          </div>
+        </td>
+        <td><span style="font-weight:700;">{{ line.required_length | int }} mm</span></td>
+        <td><span class="cut-group-count">{{ cnt.c }} stuk{{ "s" if cnt.c > 1 else "" }}</span></td>
+        <td>
+          <input type="checkbox" class="cb-group" title="Alles afvinken"
+                 onchange="checkGroup('{{ group_id }}', this)" onclick="event.stopPropagation()">
+        </td>
+      </tr>
+    </tbody>
+    {# detail rijen (standaard verborgen) #}
+    <tbody class="cut-group-body" id="{{ group_id }}">
+      {% set ns = namespace(pos=0, sn=0) %}
+      {% for cut in stock.cuts %}
+      {% set ns.pos = ns.pos + cut.length %}
+      {% set ns.sn = ns.sn + 1 %}
+      {% if cut.original_index == line_idx %}
+      <tr class="cut-row" data-group="{{ group_id }}">
+        <td><span class="cut-nr" style="background:{{ color }}">{{ ns.sn }}</span></td>
+        <td></td>
+        <td><span class="len-big">{{ cut.length | int }} mm</span></td>
+        <td style="color:#666;font-size:.9rem;">{{ (ns.pos - cut.length) | int }} &rarr; {{ ns.pos | int }} mm</td>
+        <td><input type="checkbox" class="cb-done" onchange="onCheck(this)"></td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+    {% endif %}
+    {% endfor %}
+    <tbody>
+      <tr style="background:#fdf2f2;">
+        <td colspan="3" style="color:#c0392b;font-weight:600;">Afval: {{ stock.waste | int }} mm</td>
+        <td style="color:#888;font-size:.85rem;">{{ (order.stock_length - stock.waste) | int }} &rarr; {{ order.stock_length | int }} mm</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+{# ── Draaitabel per staaf ──────────────────────────────── #}
+<div class="card">
+  <h3>Draaitabel &mdash; Per staaf</h3>
+  <p style="color:#666;font-size:.9rem;margin:.25rem 0 1rem;">Per staaf: welke lengtes en hoeveel stuks worden gezaagd.</p>
+  <table class="pivot-table">
+    <thead>
+      <tr>
+        <th>Staaf</th>
+        <th>Efficientie</th>
+        <th>Snedes (lengte &times; aantal)</th>
+        <th style="text-align:right;">Stuks</th>
+        <th style="text-align:right;">Gesneden</th>
+        <th style="text-align:right;">Afval</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for stock in plan.optimization_data.cutting_plan %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <span class="stock-num" style="width:2rem;height:2rem;font-size:1rem;">{{ stock.stock_number }}</span>
+          </div>
+        </td>
+        <td>
+          <span style="font-weight:700;color:{% if stock.efficiency >= 80 %}#27ae60{% else %}#d68910{% endif %}">
+            {{ "%.1f"|format(stock.efficiency) }}%
+          </span>
+        </td>
+        <td>
+          {# groepeer cuts op lengte-waarde #}
+          {% set seen = namespace(lengths={}) %}
+          {% for cut in stock.cuts %}
+            {% set key = cut.length | int | string %}
+            {% if key in seen.lengths %}
+              {# jinja2 kan geen dict-values muteren, gebruik teller-truc via loop #}
+            {% endif %}
+          {% endfor %}
+          {# tel per unieke lengte + kleur #}
+          {% for line in order.material_lines %}
+          {% set line_idx = loop.index0 %}
+          {% set color = PALETTE[line_idx % PALETTE|length] %}
+          {% set cnt = namespace(c=0) %}
+          {% for cut in stock.cuts %}{% if cut.original_index == line_idx %}{% set cnt.c = cnt.c + 1 %}{% endif %}{% endfor %}
+          {% if cnt.c > 0 %}
+          <span class="bar-pill" style="background:{{ color }};"
+                title="Regel {{ line.line_number }}{% if line.description %} - {{ line.description }}{% endif %}">
+            {{ line.required_length | int }}mm &times;{{ cnt.c }}
+          </span>
+          {% endif %}
+          {% endfor %}
+        </td>
+        <td style="text-align:right;font-weight:700;">{{ stock.cuts | length }}</td>
+        <td style="text-align:right;font-weight:700;">{{ stock.total_used | int }} mm</td>
+        <td style="text-align:right;color:#c0392b;">{{ stock.waste | int }} mm</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="card">
+  <p style="color:#888;">Nog geen optimalisatiegegevens beschikbaar. Status: <strong>{{ plan.status.value }}</strong></p>
+</div>
+{% endif %}
+
+<script>
+  // ── collapsible groups ─────────────────────────────────
+  function toggleGroup(id) {
+    const body = document.getElementById(id);
+    const arr  = document.getElementById("arr-" + id);
+    const isOpen = body.classList.toggle("open");
+    arr.classList.toggle("open", isOpen);
+  }
+
+  function checkGroup(groupId, masterCb) {
+    const body = document.getElementById(groupId);
+    body.querySelectorAll(".cb-done").forEach(cb => {
+      cb.checked = masterCb.checked;
+      cb.closest("tr").classList.toggle("row-done", masterCb.checked);
+    });
+    updateProgress();
+    syncCardDone(masterCb.closest(".stock-card"));
+    saveState();
+  }
+
+  // ── individual checkboxes ──────────────────────────────
+  const allCbs = () => document.querySelectorAll(".cb-done");
+
+  function onCheck(cb) {
+    cb.closest("tr").classList.toggle("row-done", cb.checked);
+    // sync group master checkbox
+    const groupId = cb.closest("tr").dataset.group;
+    if (groupId) syncGroupMaster(groupId);
+    updateProgress();
+    syncCardDone(cb.closest(".stock-card"));
+    saveState();
+  }
+
+  function syncGroupMaster(groupId) {
+    const body = document.getElementById(groupId);
+    const all  = body.querySelectorAll(".cb-done");
+    const done = body.querySelectorAll(".cb-done:checked");
+    const hdr  = document.getElementById("hdr-" + groupId);
+    if (hdr) {
+      const master = hdr.querySelector(".cb-group");
+      if (master) master.checked = all.length > 0 && all.length === done.length;
+    }
+  }
+
+  function syncCardDone(card) {
+    if (!card) return;
+    const all  = card.querySelectorAll(".cb-done");
+    const done = card.querySelectorAll(".cb-done:checked");
+    card.classList.toggle("done", all.length > 0 && all.length === done.length);
+  }
+
+  function updateProgress() {
+    const total = allCbs().length;
+    const done  = document.querySelectorAll(".cb-done:checked").length;
+    const pct   = total ? Math.round(done / total * 100) : 0;
+    document.getElementById("global-progress").style.width = pct + "%";
+    document.getElementById("progress-label").textContent = done + " / " + total + " stukken gezaagd";
+  }
+
+  // ── localStorage persistence ───────────────────────────
+  const storageKey = "zaag_" + location.pathname;
+
+  function saveState() {
+    localStorage.setItem(storageKey, JSON.stringify([...allCbs()].map(cb => cb.checked)));
+  }
+
+  function restoreState() {
+    try {
+      const state = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      allCbs().forEach((cb, i) => {
+        if (state[i]) { cb.checked = true; cb.closest("tr").classList.add("row-done"); }
+      });
+      updateProgress();
+      // sync all group masters and card states
+      document.querySelectorAll(".cut-group-body").forEach(body => syncGroupMaster(body.id));
+      document.querySelectorAll(".stock-card").forEach(card => syncCardDone(card));
+    } catch(e) {}
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("total-cuts").textContent = allCbs().length;
+    restoreState();
+  });
+</script>
+{% endblock %}

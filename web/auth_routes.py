@@ -58,7 +58,7 @@ def _get_or_create_env(user: User, db: Session) -> TenantEnvironment:
 def login_page(request: Request, current_user=Depends(get_current_user_optional)):
     if current_user:
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -71,14 +71,14 @@ def login_submit(
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.hashed_password):
         return templates.TemplateResponse(
-            request, "login.html",
-            {"error": "Ongeldig e-mailadres of wachtwoord"},
+            "login.html",
+            {"request": request, "error": "Ongeldig e-mailadres of wachtwoord"},
             status_code=401,
         )
     if not user.is_active:
         return templates.TemplateResponse(
-            request, "login.html",
-            {"error": "Dit account is uitgeschakeld"},
+            "login.html",
+            {"request": request, "error": "Dit account is uitgeschakeld"},
             status_code=403,
         )
 
@@ -94,7 +94,7 @@ def login_submit(
 def register_page(request: Request, current_user=Depends(get_current_user_optional)):
     if current_user:
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse(request, "register.html", {"error": None})
+    return templates.TemplateResponse("register.html", {"request": request, "error": None})
 
 
 @router.post("/register", response_class=HTMLResponse)
@@ -108,18 +108,18 @@ def register_submit(
 ):
     if password != password_confirm:
         return templates.TemplateResponse(
-            request, "register.html",
-            {"error": "Wachtwoorden komen niet overeen"},
+            "register.html",
+            {"request": request, "error": "Wachtwoorden komen niet overeen"},
         )
     if len(password) < 8:
         return templates.TemplateResponse(
-            request, "register.html",
-            {"error": "Wachtwoord moet minimaal 8 tekens bevatten"},
+            "register.html",
+            {"request": request, "error": "Wachtwoord moet minimaal 8 tekens bevatten"},
         )
     if db.query(User).filter(User.email == email).first():
         return templates.TemplateResponse(
-            request, "register.html",
-            {"error": "Dit e-mailadres is al in gebruik"},
+            "register.html",
+            {"request": request, "error": "Dit e-mailadres is al in gebruik"},
         )
 
     user = User(
@@ -167,7 +167,8 @@ def settings_page(
     app_settings = get_settings()
     webhook_url = f"{app_settings.app_base_url}/api/webhook/mkg/{env.webhook_token}"
 
-    return templates.TemplateResponse(request, "environment_settings.html", {
+    return templates.TemplateResponse("environment_settings.html", {
+        "request": request,
         "current_user": current_user,
         "env": env,
         "webhook_url": webhook_url,

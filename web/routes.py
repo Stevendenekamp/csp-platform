@@ -61,8 +61,8 @@ async def dashboard(
     )
 
     return templates.TemplateResponse(
-        request, "index.html",
-        {"stats": stats, "recent_plans": recent_plans, "current_user": current_user},
+        "index.html",
+        {"request": request, "stats": stats, "recent_plans": recent_plans, "current_user": current_user},
     )
 
 
@@ -85,8 +85,8 @@ async def cutting_plans_list(
         .all()
     )
     return templates.TemplateResponse(
-        request, "cutting_plans_list.html",
-        {"plans": plans, "current_user": current_user},
+        "cutting_plans_list.html",
+        {"request": request, "plans": plans, "current_user": current_user},
     )
 
 
@@ -113,12 +113,12 @@ async def cutting_plan_detail(
     )
     if not plan:
         return templates.TemplateResponse(
-            request, "404.html",
-            {"current_user": current_user},
+            "404.html",
+            {"request": request, "current_user": current_user},
             status_code=404,
         )
 
     return templates.TemplateResponse(
-        request, "cutting_plan_detail.html",
-        {"plan": plan, "order": plan.order, "current_user": current_user},
+        "cutting_plan_detail.html",
+        {"request": request, "plan": plan, "order": plan.order, "current_user": current_user},
     )

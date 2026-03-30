@@ -39,17 +39,21 @@ def _apply_migrations():
 
 
 def init_db():
-    # Voor PostgreSQL: maak enum type atomisch aan met IF NOT EXISTS
-    # zodat meerdere gunicorn workers niet met elkaar botsen
+    # Voor PostgreSQL: maak enum type aan met IF NOT EXISTS (idempotent)
     if "postgresql" in _db_url:
         with engine.connect() as conn:
-            conn.execute(text(
-                "CREATE TYPE IF NOT EXISTS optimizationstatus AS ENUM "
-                "('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')"
-            ))
-            conn.commit()
+            try:
+                conn.execute(text(
+                    "CREATE TYPE IF NOT EXISTS optimizationstatus AS ENUM "
+                    "('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')"
+                ))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
-    Base.metadata.create_all(bind=engine)
+    # checkfirst=True: sla CREATE TABLE over als tabel al bestaat
+    # zodat meerdere gunicorn workers veilig tegelijk kunnen opstarten
+    Base.metadata.create_all(bind=engine, checkfirst=True)
     _apply_migrations()
 
 

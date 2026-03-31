@@ -180,7 +180,7 @@ async def _send_plan_to_mkg(order: MaterialOrder, cutting_plan: CuttingPlan, res
         # Terugkoppeling mislukt = geen reden om het zaagplan als failed te markeren
         logger.error(f"MKG terugkoppeling mislukt voor order {order.order_id}: {e}")
 
-@router.api_route("/webhook/mkg/{webhook_token}", methods=["POST", "PUT"], status_code=202)
+@router.post("/webhook/mkg/{webhook_token}", status_code=202)
 async def mkg_webhook(
     webhook_token: str,
     payload: WebhookPayload,
@@ -372,6 +372,18 @@ async def mkg_webhook(
     except Exception as e:
         logger.error(f"=== WEBHOOK PROCESSING FAILED === {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Webhook verwerkingsfout: {str(e)}")
+
+
+@router.put("/webhook/mkg/{webhook_token}", status_code=202)
+async def mkg_webhook_put(
+    webhook_token: str,
+    payload: WebhookPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """PUT alias for the MKG webhook — delegates to the POST handler."""
+    return await mkg_webhook(webhook_token, payload, background_tasks, db)
+
 
 @router.post("/orders", response_model=MaterialOrderResponse)
 async def create_order(

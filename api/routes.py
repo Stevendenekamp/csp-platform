@@ -184,7 +184,7 @@ async def process_mkg_webhook(
     request: Request,
     webhook_token: str,
     background_tasks: BackgroundTasks,
-    db: Session,
+    db: Session = Depends(get_db),
 ):
     """Core webhook processing — shared by POST and PUT handlers."""
     # Parse body manually so we handle both POST and PUT

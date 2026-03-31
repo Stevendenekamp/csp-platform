@@ -246,8 +246,8 @@ class MKGClient:
         """
         endpoint = f"/web/v3/MKG/Documents/{document}/{rowkey}/prmv"
         params = {
-            "fieldlist": "prdh_num,prdr_num,prmv_num,prmv_lengte,totaal_aantal,"
-                         "arti_code,arti_code.arti_mat_lengte"
+            "fieldlist": "prdh_num,prdr_num,prmv_num,prmv_lengte,totaal_aantal," 
+                         "arti_code,arti_code.arti_mat_lengte,arti_code.arti_handelslengte"
         }
         response = await self._make_request("GET", endpoint, params=params)
 

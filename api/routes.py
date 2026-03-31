@@ -270,9 +270,18 @@ async def process_mkg_webhook(
             stock_per_article: dict = {}
             for i, line in enumerate(prmv_lines, start=1):
                 arti_code = line.get("arti_code") or "UNKNOWN"
-                stock_per_article[arti_code] = float(
-                    line.get("arti_code.arti_mat_lengte") or 6000.0
-                )
+                handelslengte = line.get("arti_code.arti_handelslengte")
+                mat_lengte = line.get("arti_code.arti_mat_lengte")
+                # Fallback volgorde: handelslengte > mat_lengte > default uit instellingen
+                try:
+                    if handelslengte is not None and float(handelslengte) > 0:
+                        stock_per_article[arti_code] = float(handelslengte)
+                    elif mat_lengte is not None and float(mat_lengte) > 0:
+                        stock_per_article[arti_code] = float(mat_lengte)
+                    else:
+                        stock_per_article[arti_code] = float(env.default_stock_length if env and getattr(env, 'default_stock_length', None) else 6000.0)
+                except Exception:
+                    stock_per_article[arti_code] = 6000.0
                 required_length = float(line.get("prmv_lengte") or 0)
                 quantity = int(float(line.get("totaal_aantal") or 1))
                 if required_length <= 0:

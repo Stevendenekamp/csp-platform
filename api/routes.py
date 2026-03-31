@@ -180,6 +180,20 @@ async def _send_plan_to_mkg(order: MaterialOrder, cutting_plan: CuttingPlan, res
         # Terugkoppeling mislukt = geen reden om het zaagplan als failed te markeren
         logger.error(f"MKG terugkoppeling mislukt voor order {order.order_id}: {e}")
 
+@router.get("/webhook/mkg/{webhook_token}", status_code=200)
+async def mkg_webhook_verify(
+    webhook_token: str,
+    db: Session = Depends(get_db)
+):
+    """GET verification endpoint — MKG probes this URL before sending events."""
+    env = db.query(TenantEnvironment).filter(
+        TenantEnvironment.webhook_token == webhook_token
+    ).first()
+    if not env:
+        raise HTTPException(status_code=404, detail="Unknown webhook token")
+    return {"status": "ok", "webhook": "ready"}
+
+
 @router.post("/webhook/mkg/{webhook_token}", status_code=202)
 async def mkg_webhook(
     webhook_token: str,

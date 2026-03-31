@@ -166,6 +166,9 @@ def settings_page(
     env = _get_or_create_env(current_user, db)
     app_settings = get_settings()
     webhook_url = f"{app_settings.app_base_url}/api/webhook/mkg/{env.webhook_token}"
+    # Forceer https:// aan het begin van de webhook_url
+    if webhook_url.startswith("http://"):
+        webhook_url = "https://" + webhook_url[len("http://"):]
 
     return templates.TemplateResponse("environment_settings.html", {
         "request": request,

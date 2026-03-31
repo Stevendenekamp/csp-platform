@@ -180,8 +180,7 @@ async def _send_plan_to_mkg(order: MaterialOrder, cutting_plan: CuttingPlan, res
         # Terugkoppeling mislukt = geen reden om het zaagplan als failed te markeren
         logger.error(f"MKG terugkoppeling mislukt voor order {order.order_id}: {e}")
 
-@router.post("/webhook/mkg/{webhook_token}", status_code=202)
-@router.put("/webhook/mkg/{webhook_token}", status_code=202)
+@router.api_route("/webhook/mkg/{webhook_token}", methods=["POST", "PUT"], status_code=202)
 async def mkg_webhook(
     webhook_token: str,
     payload: WebhookPayload,

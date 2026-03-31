@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from database.database import init_db
-from api.routes import router as api_router
+from api.routes import router as api_router, process_mkg_webhook
 from api.auth_routes import router as auth_api_router
 from web.routes import router as web_router
 from web.auth_routes import router as web_auth_router
@@ -39,6 +39,15 @@ app = FastAPI(
 # API routes
 app.include_router(auth_api_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
+
+# Webhook — registered directly on app (not on a sub-router) to avoid
+# Starlette 0.27 method-routing bug where GET routes swallow other methods
+app.add_api_route(
+    "/api/webhook/mkg/{webhook_token}",
+    process_mkg_webhook,
+    methods=["POST", "PUT"],
+    status_code=202,
+)
 
 # Web UI routes
 app.include_router(web_auth_router)   # /login, /register, /logout, /settings

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from collections import defaultdict
@@ -194,16 +194,24 @@ async def mkg_webhook_verify(
     return {"status": "ok", "webhook": "ready"}
 
 
-@router.post("/webhook/mkg/{webhook_token}", status_code=202)
-async def mkg_webhook(
+async def _process_mkg_webhook(
+    request: Request,
     webhook_token: str,
-    payload: WebhookPayload,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session,
 ):
-    """Per-tenant webhook endpoint for MKG events.
-    Each user gets a unique webhook URL: /api/webhook/mkg/{webhook_token}
-    """
+    """Core webhook processing — shared by POST and PUT handlers."""
+    # Parse body manually so we handle both POST and PUT
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Ongeldige JSON in request body")
+
+    try:
+        payload = WebhookPayload(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Webhook payload validatiefout: {e}")
+
     # ── Resolve the tenant environment ───────────────────────────────────────
     env = db.query(TenantEnvironment).filter(
         TenantEnvironment.webhook_token == webhook_token
@@ -213,7 +221,7 @@ async def mkg_webhook(
 
     user_id = env.user_id
     use_mkg = env.use_mkg
-    logger.info(f"=== WEBHOOK RECEIVED === user_id={user_id}")
+    logger.info(f"=== WEBHOOK RECEIVED ({request.method}) === user_id={user_id}")
     logger.info(f"Type: {payload.type}, Timestamp: {payload.timestamp}")
     logger.info(f"Data: {payload.data}")
 
@@ -318,11 +326,8 @@ async def mkg_webhook(
         # -------------------------------------------------------------------
         for arti_code, lines in lines_by_article.items():
             stock_length = stock_per_article.get(arti_code, 6000.0)
-            # order_id = iofa_num + artikel — uniek per artikel per aanvraag
             order_id = f"{iofa_num}-{arti_code}"
 
-            # Als het order al bestaat (herhaalde webhook), verwijder dan de oude
-            # versie zodat het zaagplan opnieuw berekend wordt met actuele MKG data
             existing = db.query(MaterialOrder).filter(
                 MaterialOrder.order_id == order_id,
                 MaterialOrder.user_id == user_id,
@@ -388,15 +393,26 @@ async def mkg_webhook(
         raise HTTPException(status_code=500, detail=f"Webhook verwerkingsfout: {str(e)}")
 
 
-@router.put("/webhook/mkg/{webhook_token}", status_code=202)
-async def mkg_webhook_put(
+@router.post("/webhook/mkg/{webhook_token}", status_code=202)
+async def mkg_webhook_post(
+    request: Request,
     webhook_token: str,
-    payload: WebhookPayload,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """PUT alias for the MKG webhook — delegates to the POST handler."""
-    return await mkg_webhook(webhook_token, payload, background_tasks, db)
+    """POST handler for MKG webhook events."""
+    return await _process_mkg_webhook(request, webhook_token, background_tasks, db)
+
+
+@router.put("/webhook/mkg/{webhook_token}", status_code=202)
+async def mkg_webhook_put(
+    request: Request,
+    webhook_token: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """PUT handler for MKG webhook events."""
+    return await _process_mkg_webhook(request, webhook_token, background_tasks, db)
 
 
 @router.post("/orders", response_model=MaterialOrderResponse)

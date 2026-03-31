@@ -1,20 +1,20 @@
 {% extends "layout.html" %}
 
-{% block title %}Zaagplan - Order {{ order.order_id }}{% endblock %}
+{% block title %}Zaagplan — Order {{ order.order_id }}{% endblock %}
 
 {% block content %}
 <style>
-  /* ── layout ───────────────────────────────────────── */
+  /* ── detail page overrides ────────────────────────── */
   .op-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
-  .op-header h2 { font-size:1.8rem; margin:0; }
+  .op-header h2 { font-size:1.6rem; margin:0; font-family:'Raleway',sans-serif; color:var(--navy-deep); }
   .op-meta { display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:.5rem; }
-  .op-meta span { font-size:1rem; color:#555; }
-  .op-meta strong { color:#222; }
+  .op-meta span { font-size:.9rem; color:var(--text-muted); }
+  .op-meta strong { color:var(--navy-deep); }
 
-  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin-bottom:.5rem; }
-  .summary-tile { background:#f0f4ff; border-radius:8px; padding:1rem 1.25rem; text-align:center; border:1px solid #d0d8f0; }
-  .summary-tile .val { font-size:2rem; font-weight:700; color:#2c3e50; }
-  .summary-tile .lbl { font-size:.8rem; color:#666; margin-top:.25rem; }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; margin-bottom:.5rem; }
+  .summary-tile { background:var(--cream); border-radius:6px; padding:1rem 1.25rem; text-align:center; border:1px solid var(--border); }
+  .summary-tile .val { font-size:1.9rem; font-weight:700; color:var(--navy-deep); font-family:'Raleway',sans-serif; }
+  .summary-tile .lbl { font-size:.75rem; color:var(--text-muted); margin-top:.2rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
 
   /* ── legend ───────────────────────────────────────── */
   .legend { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; }
@@ -22,89 +22,97 @@
   .legend-dot { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
 
   /* ── stock cards ──────────────────────────────────── */
-  .stock-card { background:white; border-radius:10px; padding:1.5rem; margin-bottom:1.5rem;
-    box-shadow:0 2px 6px rgba(0,0,0,.1); border-left:6px solid #3498db; }
-  .stock-card.done { border-left-color:#27ae60; opacity:.75; }
+  .stock-card { background:white; border-radius:6px; padding:1.5rem; margin-bottom:1.25rem;
+    border:1px solid var(--border); border-left:5px solid var(--orange);
+    box-shadow:0 1px 4px rgba(22,32,42,.07); }
+  .stock-card.done { border-left-color:#059669; opacity:.78; }
   .stock-title { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
-  .stock-num { background:#3498db; color:white; font-size:1.4rem; font-weight:700;
-    width:2.5rem; height:2.5rem; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .stock-title h3 { font-size:1.2rem; margin:0; }
-  .eff-badge { margin-left:auto; font-size:.85rem; font-weight:600; padding:.25rem .75rem;
-    border-radius:12px; background:#eafaf1; color:#27ae60; border:1px solid #abebc6; }
-  .eff-badge.warn { background:#fef9e7; color:#d68910; border-color:#f9e79f; }
+  .stock-num { background:var(--navy); color:white; font-size:1.2rem; font-weight:700;
+    width:2.4rem; height:2.4rem; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; font-family:'Raleway',sans-serif; }
+  .stock-title h3 { font-size:1.1rem; margin:0; color:var(--navy-deep); font-family:'Raleway',sans-serif; }
+  .eff-badge { margin-left:auto; font-size:.82rem; font-weight:600; padding:.2rem .7rem;
+    border-radius:20px; background:#D1FAE5; color:#065F46; border:1px solid #A7F3D0; }
+  .eff-badge.warn { background:#FEF3C7; color:#92400E; border-color:#FDE68A; }
 
   /* ── visual bar ───────────────────────────────────── */
-  .cut-bar { display:flex; height:52px; border-radius:6px; overflow:hidden;
-    border:1px solid #ccc; width:100%; margin-bottom:1rem; }
+  .cut-bar { display:flex; height:50px; border-radius:5px; overflow:hidden;
+    border:1px solid var(--border); width:100%; margin-bottom:1rem; }
   .cut-seg {
     height:100%; display:flex; align-items:center; justify-content:center;
-    color:white; font-size:.8rem; font-weight:700;
+    color:white; font-size:.78rem; font-weight:700;
     cursor:default; position:relative;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;
-    border-right:2px solid rgba(255,255,255,0.55);
+    border-right:2px solid rgba(255,255,255,0.4);
     box-sizing:border-box;
   }
   .cut-seg:last-child { border-right:none; }
   .cut-seg.waste-seg {
-    background:repeating-linear-gradient(45deg,#c0392b,#c0392b 6px,#e74c3c 6px,#e74c3c 12px) !important;
-    color:white; font-size:.75rem; border-right:none;
+    background:repeating-linear-gradient(45deg,#991B1B,#991B1B 6px,#DC2626 6px,#DC2626 12px) !important;
+    color:white; font-size:.72rem; border-right:none;
   }
   .cut-seg .tip {
     visibility:hidden; opacity:0; pointer-events:none;
     position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%);
-    background:#2c3e50; color:white; padding:.4rem .75rem; border-radius:6px;
-    font-size:.85rem; white-space:nowrap; z-index:20; transition:opacity .15s; line-height:1.5;
+    background:var(--navy-deep); color:white; padding:.4rem .75rem; border-radius:5px;
+    font-size:.82rem; white-space:nowrap; z-index:20; transition:opacity .15s; line-height:1.5;
+    border:1px solid rgba(255,255,255,.1);
   }
   .cut-seg:hover .tip { visibility:visible; opacity:1; }
 
   /* ── collapsible cut groups ───────────────────────── */
   .cut-group-header {
     display:flex; align-items:center; gap:.75rem;
-    padding:.6rem .9rem; cursor:pointer; border-radius:6px;
-    background:#f4f6f8; border:1px solid #e0e4ea;
+    padding:.55rem .9rem; cursor:pointer; border-radius:5px;
+    background:var(--cream); border:1px solid var(--border);
     margin-bottom:2px; user-select:none;
   }
-  .cut-group-header:hover { background:#e8ecf1; }
-  .cut-group-toggle { font-size:.8rem; color:#888; transition:transform .2s; flex-shrink:0; }
+  .cut-group-header:hover { background:var(--gray-light); }
+  .cut-group-toggle { font-size:.75rem; color:var(--text-muted); transition:transform .2s; flex-shrink:0; }
   .cut-group-toggle.open { transform:rotate(90deg); }
-  .cut-group-count { font-size:.85rem; color:#555; margin-left:auto; }
+  .cut-group-count { font-size:.82rem; color:var(--text-muted); margin-left:auto; }
   .cut-group-body { display:none; }
   .cut-group-body.open { display:table-row-group; }
 
   .cut-table { width:100%; border-collapse:collapse; margin-top:.5rem; }
-  .cut-table th { background:#2c3e50; color:white; padding:.6rem 1rem; text-align:left; font-size:.9rem; }
-  .cut-table td { padding:.6rem 1rem; border-bottom:1px solid #eee; font-size:1rem; }
-  .cut-nr { width:2.3rem; height:2.3rem; border-radius:50%;
+  .cut-table th { background:var(--navy); color:white; padding:.55rem 1rem; text-align:left; font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; }
+  .cut-table th:first-child { border-radius:4px 0 0 0; }
+  .cut-table th:last-child { border-radius:0 4px 0 0; }
+  .cut-table td { padding:.6rem 1rem; border-bottom:1px solid var(--gray-light); font-size:.9rem; }
+  .cut-nr { width:2.2rem; height:2.2rem; border-radius:50%;
     display:inline-flex; align-items:center; justify-content:center;
-    color:white; font-weight:700; font-size:.85rem; }
-  .len-big { font-size:1.15rem; font-weight:700; color:#2c3e50; }
-  .cb-done { width:1.3rem; height:1.3rem; cursor:pointer; accent-color:#27ae60; }
-  .cb-group { width:1.3rem; height:1.3rem; cursor:pointer; accent-color:#27ae60; }
+    color:white; font-weight:700; font-size:.82rem; }
+  .len-big { font-size:1.05rem; font-weight:700; color:var(--navy-deep); }
+  .cb-done { width:1.2rem; height:1.2rem; cursor:pointer; accent-color:#059669; }
+  .cb-group { width:1.2rem; height:1.2rem; cursor:pointer; accent-color:#059669; }
   .row-done td { text-decoration:line-through; color:#aaa; }
-  .group-done .cut-group-header { opacity:.6; }
+  .group-done .cut-group-header { opacity:.55; }
 
   /* ── pivot table ──────────────────────────────────── */
-  .pivot-table { width:100%; border-collapse:collapse; margin-top:.75rem; font-size:.92rem; }
-  .pivot-table th { background:#34495e; color:white; padding:.55rem .9rem; text-align:left; }
-  .pivot-table td { padding:.55rem .9rem; border-bottom:1px solid #eee; vertical-align:top; }
-  .pivot-table tr:hover td { background:#f8f9fa; }
+  .pivot-table { width:100%; border-collapse:collapse; margin-top:.75rem; font-size:.88rem; }
+  .pivot-table th { background:var(--navy); color:white; padding:.5rem .9rem; text-align:left;
+    letter-spacing:.04em; text-transform:uppercase; font-size:.78rem; }
+  .pivot-table td { padding:.55rem .9rem; border-bottom:1px solid var(--gray-light); vertical-align:top; }
+  .pivot-table tbody tr:hover td { background:#FAFAF6; }
   .bar-pill {
     display:inline-flex; align-items:center; justify-content:center;
-    background:#3498db; color:white; border-radius:6px;
-    font-size:.75rem; font-weight:700; height:1.6rem; padding:0 .5rem; margin:1px;
+    color:white; border-radius:4px;
+    font-size:.72rem; font-weight:700; height:1.5rem; padding:0 .45rem; margin:1px;
     white-space:nowrap;
   }
 
   /* ── misc ─────────────────────────────────────────── */
-  .btn-print { background:#2c3e50; color:white; border:none; padding:.6rem 1.4rem;
-    border-radius:6px; cursor:pointer; font-size:.95rem; display:inline-block; }
-  .btn-print:hover { background:#1a252f; }
-  .progress-bar-wrap { background:#eee; border-radius:999px; height:12px; overflow:hidden; margin-top:.5rem; }
-  .progress-bar-fill { height:100%; background:#27ae60; border-radius:999px; transition:width .3s; }
+  .btn-print { background:var(--navy); color:white; border:none; padding:.55rem 1.4rem;
+    border-radius:5px; cursor:pointer; font-size:.9rem; display:inline-block;
+    font-family:'DM Sans',sans-serif; font-weight:600;
+    transition:background .15s; }
+  .btn-print:hover { background:var(--navy-deep); }
+  .progress-bar-wrap { background:var(--gray-light); border-radius:999px; height:10px; overflow:hidden; margin-top:.5rem; }
+  .progress-bar-fill { height:100%; background:#059669; border-radius:999px; transition:width .3s; }
+
   @media print {
     .nav, .btn-print, .cb-done, .cb-group { display:none; }
-    .stock-card { page-break-inside:avoid; box-shadow:none; border:1px solid #ccc; }
+    .stock-card { page-break-inside:avoid; box-shadow:none; border:1px solid var(--border); }
     .cut-group-body { display:table-row-group !important; }
   }
 </style>
@@ -138,14 +146,14 @@
     <div class="summary-tile"><div class="val">{{ "%.1f"|format(plan.optimization_data.summary.average_efficiency) }}%</div><div class="lbl">Gem. efficientie</div></div>
     <div class="summary-tile"><div class="val">{{ "%.0f"|format(plan.total_waste) }} mm</div><div class="lbl">Totaal afval</div></div>
   </div>
-  <div style="font-size:.9rem;color:#555;margin-top:.5rem;">Zaagvoortgang (vink stukken af)</div>
+  <div style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;">Zaagvoortgang</div>
   <div class="progress-bar-wrap"><div class="progress-bar-fill" id="global-progress" style="width:0%"></div></div>
-  <div id="progress-label" style="font-size:.85rem;color:#555;margin-top:.3rem;">0 / <span id="total-cuts">0</span> stukken gezaagd</div>
+  <div id="progress-label" style="font-size:.82rem;color:var(--text-muted);margin-top:.3rem;">0 / <span id="total-cuts">0</span> stukken gezaagd</div>
 </div>
 
 {# ── Kleurenlegenda ────────────────────────────────────── #}
 <div class="card" style="padding:1rem 1.5rem;">
-  <strong style="display:block;margin-bottom:.6rem;">Legenda materiaalregels</strong>
+  <div class="section-title">Legenda materiaalregels</div>
   <div class="legend">
     {% for line in order.material_lines %}
     {% set color = PALETTE[loop.index0 % PALETTE|length] %}
@@ -245,9 +253,9 @@
     {% endif %}
     {% endfor %}
     <tbody>
-      <tr style="background:#fdf2f2;">
-        <td colspan="3" style="color:#c0392b;font-weight:600;">Afval: {{ stock.waste | int }} mm</td>
-        <td style="color:#888;font-size:.85rem;">{{ (order.stock_length - stock.waste) | int }} &rarr; {{ order.stock_length | int }} mm</td>
+      <tr style="background:#FEF2F2;">
+        <td colspan="3" style="color:#DC2626;font-weight:600;">Afval: {{ stock.waste | int }} mm</td>
+        <td style="color:var(--text-muted);font-size:.82rem;">{{ (order.stock_length - stock.waste) | int }} &rarr; {{ order.stock_length | int }} mm</td>
         <td></td>
       </tr>
     </tbody>
@@ -258,7 +266,7 @@
 {# ── Draaitabel per staaf ──────────────────────────────── #}
 <div class="card">
   <h3>Draaitabel &mdash; Per staaf</h3>
-  <p style="color:#666;font-size:.9rem;margin:.25rem 0 1rem;">Per staaf: welke lengtes en hoeveel stuks worden gezaagd.</p>
+  <p class="card-sub">Per staaf: welke lengtes en hoeveel stuks worden gezaagd.</p>
   <table class="pivot-table">
     <thead>
       <tr>
@@ -279,7 +287,7 @@
           </div>
         </td>
         <td>
-          <span style="font-weight:700;color:{% if stock.efficiency >= 80 %}#27ae60{% else %}#d68910{% endif %}">
+          <span style="font-weight:700;color:{% if stock.efficiency >= 80 %}#059669{% else %}#D97706{% endif %}">
             {{ "%.1f"|format(stock.efficiency) }}%
           </span>
         </td>
@@ -306,9 +314,9 @@
           {% endif %}
           {% endfor %}
         </td>
-        <td style="text-align:right;font-weight:700;">{{ stock.cuts | length }}</td>
-        <td style="text-align:right;font-weight:700;">{{ stock.total_used | int }} mm</td>
-        <td style="text-align:right;color:#c0392b;">{{ stock.waste | int }} mm</td>
+        <td style="text-align:right;font-weight:600;">{{ stock.cuts | length }}</td>
+        <td style="text-align:right;font-weight:600;">{{ stock.total_used | int }} mm</td>
+        <td style="text-align:right;color:#DC2626;">{{ stock.waste | int }} mm</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -317,7 +325,7 @@
 
 {% else %}
 <div class="card">
-  <p style="color:#888;">Nog geen optimalisatiegegevens beschikbaar. Status: <strong>{{ plan.status.value }}</strong></p>
+  <p style="color:var(--text-muted);">Nog geen optimalisatiegegevens beschikbaar. Status: <strong>{{ plan.status.value }}</strong></p>
 </div>
 {% endif %}
 

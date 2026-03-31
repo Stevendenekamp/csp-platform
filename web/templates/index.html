@@ -1,54 +1,96 @@
 {% extends "layout.html" %}
 
+{% block title %}Dashboard — CSP{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 1rem;
+        margin-top: .5rem;
+    }
+    .stat-tile {
+        background: var(--cream);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1.1rem 1.25rem;
+        text-align: center;
+    }
+    .stat-tile .stat-val {
+        font-family: 'Raleway', sans-serif;
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--navy-deep);
+        line-height: 1;
+    }
+    .stat-tile .stat-lbl {
+        font-size: .75rem;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-top: .35rem;
+    }
+    .stat-tile.orange .stat-val { color: var(--orange); }
+    .stat-tile.copper .stat-val { color: var(--copper); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <h2>Dashboard</h2>
-    <p>Welkom bij CSP – Cutting Solution Platform</p>
-</div>
-
-<div class="card">
-    <h3>Statistieken</h3>
-    <table>
-        <tr>
-            <th>Totaal Orders</th>
-            <th>In Behandeling</th>
-            <th>Voltooid</th>
-            <th>Mislukt</th>
-        </tr>
-        <tr>
-            <td>{{ stats.total_orders }}</td>
-            <td>{{ stats.processing }}</td>
-            <td>{{ stats.completed }}</td>
-            <td>{{ stats.failed }}</td>
-        </tr>
-    </table>
+    <p class="card-sub">Overzicht van uw productie- en zaagactiviteit.</p>
+    <div class="stats-grid">
+        <div class="stat-tile">
+            <div class="stat-val">{{ stats.total_orders }}</div>
+            <div class="stat-lbl">Totaal orders</div>
+        </div>
+        <div class="stat-tile orange">
+            <div class="stat-val">{{ stats.processing }}</div>
+            <div class="stat-lbl">In behandeling</div>
+        </div>
+        <div class="stat-tile">
+            <div class="stat-val" style="color: #059669;">{{ stats.completed }}</div>
+            <div class="stat-lbl">Voltooid</div>
+        </div>
+        <div class="stat-tile copper">
+            <div class="stat-val">{{ stats.failed }}</div>
+            <div class="stat-lbl">Mislukt</div>
+        </div>
+    </div>
 </div>
 
 <div class="card">
     <h3>Recente Zaagplannen</h3>
+    <p class="card-sub">De meest recente zaagplannen in uw omgeving.</p>
+    {% if recent_plans %}
     <table>
         <thead>
             <tr>
                 <th>Order ID</th>
                 <th>Artikel</th>
                 <th>Status</th>
-                <th>Voorraad Gebruikt</th>
+                <th>Staven gebruikt</th>
                 <th>Afval %</th>
-                <th>Acties</th>
+                <th>Actie</th>
             </tr>
         </thead>
         <tbody>
             {% for plan in recent_plans %}
             <tr>
-                <td>{{ plan.order.order_id }}</td>
+                <td><strong>{{ plan.order.order_id }}</strong></td>
                 <td>{{ plan.order.article_code }}</td>
                 <td><span class="status {{ plan.status.value }}">{{ plan.status.value }}</span></td>
-                <td>{{ plan.total_stock_used or '-' }}</td>
-                <td>{{ "%.2f"|format(plan.waste_percentage) if plan.waste_percentage else '-' }}%</td>
+                <td>{{ plan.total_stock_used or '—' }}</td>
+                <td>{{ "%.1f"|format(plan.waste_percentage) if plan.waste_percentage else '—' }}%</td>
                 <td><a href="/cutting-plans/{{ plan.order_id }}" class="btn">Bekijk</a></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">Nog geen zaagplannen beschikbaar.</p>
+    {% endif %}
 </div>
 {% endblock %}

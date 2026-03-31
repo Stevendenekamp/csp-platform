@@ -1,48 +1,50 @@
 {% extends "layout.html" %}
 
-{% block title %}Account aanmaken{% endblock %}
+{% block title %}Account aanmaken — CSP{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-wrap { max-width: 440px; margin: 4rem auto; }
+    .auth-wrap .card { padding: 2rem; }
+    .auth-wrap h2 { font-family: 'Raleway', sans-serif; font-size: 1.4rem; margin-bottom: 1.5rem; color: var(--navy-deep); }
+    .auth-wrap .btn-submit { width: 100%; padding: .7rem; font-size: .95rem; text-align: center; }
+    .auth-footer { text-align: center; margin-top: 1.25rem; font-size: .875rem; color: var(--text-muted); }
+    .auth-footer a { color: var(--orange); text-decoration: none; font-weight: 600; }
+    .auth-footer a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="max-width: 440px; margin: 4rem auto;">
+<div class="auth-wrap">
     <div class="card">
-        <h2 style="margin-bottom: 1.5rem; color: #2c3e50;">Account aanmaken</h2>
+        <h2>Account aanmaken</h2>
 
         {% if error %}
-        <div style="background:#ffeaea;color:#c0392b;padding:0.75rem 1rem;border-radius:4px;margin-bottom:1rem;border-left:4px solid #e74c3c;">
-            {{ error }}
-        </div>
+        <div class="alert alert-danger">{{ error }}</div>
         {% endif %}
 
         <form method="post" action="/register">
-            <div style="margin-bottom:1rem;">
-                <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Naam</label>
-                <input type="text" name="username" required autofocus minlength="2"
-                    style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:1rem;"
-                    placeholder="Voornaam Achternaam / Bedrijfsnaam">
+            <div class="form-group">
+                <label for="username">Naam</label>
+                <input type="text" id="username" name="username" required autofocus minlength="2" placeholder="Voornaam Achternaam / Bedrijfsnaam">
             </div>
-            <div style="margin-bottom:1rem;">
-                <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">E-mailadres</label>
-                <input type="email" name="email" required
-                    style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:1rem;">
+            <div class="form-group">
+                <label for="email">E-mailadres</label>
+                <input type="email" id="email" name="email" required>
             </div>
-            <div style="margin-bottom:1rem;">
-                <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Wachtwoord</label>
-                <input type="password" name="password" required minlength="8"
-                    style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:1rem;"
-                    placeholder="Minimaal 8 tekens">
+            <div class="form-group">
+                <label for="password">Wachtwoord</label>
+                <input type="password" id="password" name="password" required minlength="8" placeholder="Minimaal 8 tekens">
             </div>
-            <div style="margin-bottom:1.5rem;">
-                <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Wachtwoord bevestigen</label>
-                <input type="password" name="password_confirm" required minlength="8"
-                    style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:1rem;">
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="password_confirm">Wachtwoord bevestigen</label>
+                <input type="password" id="password_confirm" name="password_confirm" required minlength="8">
             </div>
-            <button type="submit" class="btn" style="width:100%;padding:.75rem;font-size:1rem;">
-                Account aanmaken
-            </button>
+            <button type="submit" class="btn btn-submit">Account aanmaken</button>
         </form>
 
-        <p style="text-align:center;margin-top:1.25rem;color:#777;">
-            Al een account? <a href="/login" style="color:#3498db;">Inloggen</a>
+        <p class="auth-footer">
+            Al een account? <a href="/login">Inloggen</a>
         </p>
     </div>
 </div>

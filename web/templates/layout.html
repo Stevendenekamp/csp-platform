@@ -3,39 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CSP Cutting Solution Platform{% endblock %}</title>
+    <title>{% block title %}CSP – Cutting Solution Platform{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Raleway:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --navy-deep:  #16202A;
+            --navy:       #253448;
+            --gray:       #C9C2B2;
+            --gray-light: #E8E4DC;
+            --cream:      #FCF9EE;
+            --orange:     #FF9226;
+            --copper:     #A85D3D;
+            --white:      #FFFFFF;
+            --text:       #16202A;
+            --text-muted: #6B7280;
+            --border:     #D9D5CC;
+            --success:    #166534;
+            --success-bg: #DCFCE7;
+            --danger:     #991B1B;
+            --danger-bg:  #FEE2E2;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
-        .header { background: #2c3e50; color: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center; }
-        .header h1 { font-size: 1.5rem; }
-        .header-user { font-size:.9rem; color:#bdc3c7; }
-        .nav { background: #34495e; padding: 0.5rem 2rem; display:flex; justify-content:space-between; align-items:center; }
-        .nav-left a { color: white; text-decoration: none; margin-right: 2rem; padding: 0.5rem 1rem; display: inline-block; }
-        .nav-left a:hover { background: #2c3e50; border-radius: 4px; }
-        .nav-right a { color: #bdc3c7; text-decoration: none; margin-left: 1.5rem; padding: 0.4rem 0.9rem; font-size:.9rem; display: inline-block; border-radius:4px; }
-        .nav-right a:hover { background: #2c3e50; color:white; }
-        .nav-right a.settings-link { color: #f39c12; }
-        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
-        .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .status { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem; font-weight: 600; }
-        .status.pending { background: #ffeaa7; color: #2d3436; }
-        .status.processing { background: #74b9ff; color: #2d3436; }
-        .status.completed { background: #55efc4; color: #2d3436; }
-        .status.failed { background: #ff7675; color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f8f9fa; font-weight: 600; }
-        .btn { padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
-        .btn:hover { background: #2980b9; }
-        .cutting-bar { height: 40px; background: #95a5a6; position: relative; margin: 1rem 0; border-radius: 4px; overflow: hidden; }
-        .cut-segment { height: 100%; float: left; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: bold; }
-        .waste { background: #e74c3c !important; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--cream);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 15px;
+        }
+
+        /* ── Header ─────────────────────────────── */
+        .header {
+            background: var(--navy-deep);
+            color: white;
+            padding: 0 2rem;
+            height: 62px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+            text-decoration: none;
+        }
+        .header-logo {
+            font-family: 'Raleway', sans-serif;
+            font-weight: 700;
+            font-size: 1.75rem;
+            color: var(--orange);
+            letter-spacing: .04em;
+            line-height: 1;
+        }
+        .header-tagline {
+            font-family: 'DM Sans', sans-serif;
+            font-size: .65rem;
+            color: var(--gray);
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            border-left: 1px solid rgba(255,255,255,.15);
+            padding-left: .9rem;
+            line-height: 1.45;
+        }
+        .header-user {
+            font-size: .85rem;
+            color: var(--gray);
+        }
+        .header-user strong { color: white; font-weight: 600; }
+
+        /* ── Navigation ──────────────────────────── */
+        .nav {
+            background: var(--navy);
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            height: 44px;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+        }
+        .nav-left, .nav-right { display: flex; align-items: stretch; }
+        .nav a {
+            color: rgba(201,194,178,.75);
+            text-decoration: none;
+            padding: 0 1rem;
+            font-size: .85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            transition: color .15s, border-color .15s, background .15s;
+        }
+        .nav-left a:hover {
+            color: white;
+            border-bottom-color: var(--orange);
+        }
+        .nav-right a:hover {
+            color: white;
+            background: rgba(255,255,255,.05);
+        }
+        .nav-right a.settings-link { color: var(--orange); }
+        .nav-right a.settings-link:hover { color: #ffaa55; }
+
+        /* ── Page container ──────────────────────── */
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* ── Cards ───────────────────────────────── */
+        .card {
+            background: var(--white);
+            border-radius: 6px;
+            padding: 1.5rem;
+            margin-bottom: 1.25rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(22,32,42,.08);
+        }
+        .card h2 {
+            font-family: 'Raleway', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--navy-deep);
+            margin-bottom: .35rem;
+        }
+        .card h3 {
+            font-family: 'Raleway', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--navy);
+            margin-bottom: .35rem;
+        }
+        .card > p, .card > .card-sub {
+            color: var(--text-muted);
+            font-size: .875rem;
+            margin-bottom: 1rem;
+        }
+
+        /* ── Status badges ───────────────────────── */
+        .status {
+            display: inline-block;
+            padding: .2rem .65rem;
+            border-radius: 20px;
+            font-size: .78rem;
+            font-weight: 600;
+            letter-spacing: .02em;
+            text-transform: capitalize;
+        }
+        .status.pending    { background: #FEF3C7; color: #92400E; }
+        .status.processing { background: #DBEAFE; color: #1E40AF; }
+        .status.completed  { background: #D1FAE5; color: #065F46; }
+        .status.failed     { background: #FEE2E2; color: #991B1B; }
+
+        /* ── Tables ──────────────────────────────── */
+        table { width: 100%; border-collapse: collapse; margin-top: .75rem; }
+        th {
+            background: var(--navy);
+            color: white;
+            padding: .55rem 1rem;
+            text-align: left;
+            font-size: .8rem;
+            font-weight: 600;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+        th:first-child { border-radius: 4px 0 0 0; }
+        th:last-child  { border-radius: 0 4px 0 0; }
+        td { padding: .65rem 1rem; border-bottom: 1px solid var(--gray-light); font-size: .875rem; }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: #FAFAF6; }
+
+        /* ── Buttons ─────────────────────────────── */
+        .btn {
+            padding: .45rem 1.1rem;
+            background: var(--orange);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: .85rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            transition: background .15s, box-shadow .15s;
+            letter-spacing: .01em;
+        }
+        .btn:hover { background: #e8841f; box-shadow: 0 2px 8px rgba(255,146,38,.25); }
+        .btn-navy    { background: var(--navy); }
+        .btn-navy:hover   { background: var(--navy-deep); box-shadow: 0 2px 8px rgba(22,32,42,.2); }
+        .btn-success { background: #059669; }
+        .btn-success:hover { background: #047857; }
+        .btn-copper  { background: var(--copper); }
+        .btn-copper:hover  { background: #8f4d33; }
+        .btn-danger  { background: #DC2626; }
+        .btn-danger:hover  { background: #B91C1C; }
+        .btn-outline {
+            background: transparent;
+            color: var(--navy);
+            border: 1.5px solid var(--navy);
+        }
+        .btn-outline:hover { background: var(--navy); color: white; box-shadow: none; }
+
+        /* ── Form elements ───────────────────────── */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: .35rem;
+            font-weight: 600;
+            font-size: .85rem;
+            color: var(--navy);
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: .6rem .85rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: .925rem;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text);
+            background: white;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--orange);
+            box-shadow: 0 0 0 3px rgba(255,146,38,.15);
+        }
+        .form-group small { color: var(--text-muted); font-size: .78rem; display: block; margin-top: .2rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        /* ── Alert banners ───────────────────────── */
+        .alert { padding: .8rem 1rem; border-radius: 4px; margin-bottom: 1.25rem; font-size: .875rem; }
+        .alert-success { background: #DCFCE7; color: #166534; border-left: 4px solid #16A34A; }
+        .alert-danger   { background: #FEE2E2; color: #991B1B; border-left: 4px solid #DC2626; }
+        .alert-warning  { background: #FEF3C7; color: #92400E; border-left: 4px solid #D97706; }
+        .alert-info     { background: #DBEAFE; color: #1E40AF; border-left: 4px solid #2563EB; }
+
+        /* ── Dividers & misc ─────────────────────── */
+        .section-title {
+            font-family: 'Raleway', sans-serif;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: .75rem;
+            padding-bottom: .4rem;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        .cutting-bar { height: 40px; background: var(--gray-light); position: relative; margin: 1rem 0; border-radius: 4px; overflow: hidden; }
+        .cut-segment { height: 100%; float: left; display: flex; align-items: center; justify-content: center; color: white; font-size: .8rem; font-weight: bold; }
+        .waste { background: #DC2626 !important; }
+
+        /* ── Monospace/code ──────────────────────── */
+        .mono {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: .875rem;
+            background: var(--cream);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: .85rem 1rem;
+            word-break: break-all;
+            color: var(--navy-deep);
+        }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
     <div class="header">
-        <h1>✂️ CSP – Cutting Solution Platform</h1>
+        <a class="header-brand" href="/">
+            <span class="header-logo">CSP</span>
+            <span class="header-tagline">Connect Systems<br>with Precision</span>
+        </a>
         <div class="header-user">
             {% if current_user is defined and current_user %}
                 Ingelogd als <strong>{{ current_user.username }}</strong>
@@ -51,7 +302,7 @@
         </div>
         <div class="nav-right">
             {% if current_user is defined and current_user %}
-                <a href="/settings" class="settings-link">⚙️ Instellingen</a>
+                <a href="/settings" class="settings-link">Instellingen</a>
                 <a href="/logout">Uitloggen</a>
             {% else %}
                 <a href="/login">Inloggen</a>

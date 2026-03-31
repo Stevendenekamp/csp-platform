@@ -1,137 +1,161 @@
 {% extends "layout.html" %}
 
-{% block title %}Omgevingsinstellingen{% endblock %}
+{% block title %}Instellingen — CSP{% endblock %}
+
+{% block extra_head %}
+<style>
+    .settings-wrap { max-width: 700px; margin: 0 auto; }
+    .settings-wrap .card h2 { margin-bottom: .25rem; }
+    .settings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .settings-row .full { grid-column: 1 / -1; }
+    .checkbox-row { display: flex; align-items: center; gap: .65rem; padding-top: 1.4rem; }
+    .checkbox-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--orange); flex-shrink: 0; }
+    .checkbox-row label { margin: 0; cursor: pointer; font-size: .9rem; }
+    .settings-actions { margin-top: 1.75rem; }
+    .account-table { width: auto; }
+    .account-table th {
+        background: none;
+        color: var(--text-muted);
+        font-size: .78rem;
+        letter-spacing: .06em;
+        padding: .4rem 1.5rem .4rem 0;
+        text-align: left;
+        border-radius: 0;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--gray-light);
+    }
+    .account-table td {
+        padding: .4rem 0;
+        font-size: .9rem;
+        border-bottom: 1px solid var(--gray-light);
+        color: var(--text);
+    }
+    .account-table tr:last-child th,
+    .account-table tr:last-child td { border-bottom: none; }
+    .webhook-warning {
+        font-size: .82rem;
+        color: var(--copper);
+        margin-top: .75rem;
+        display: flex;
+        gap: .4rem;
+        align-items: flex-start;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="max-width: 680px; margin: 0 auto;">
+<div class="settings-wrap">
 
     {% if saved %}
-    <div style="background:#d4edda;color:#155724;padding:0.85rem 1rem;border-radius:4px;margin-bottom:1.25rem;border-left:4px solid #28a745;">
-        ✅ Instellingen opgeslagen.
-    </div>
+    <div class="alert alert-success">Instellingen opgeslagen.</div>
     {% endif %}
 
     {% if error %}
-    <div style="background:#ffeaea;color:#c0392b;padding:0.85rem 1rem;border-radius:4px;margin-bottom:1.25rem;border-left:4px solid #e74c3c;">
-        {{ error }}
-    </div>
+    <div class="alert alert-danger">{{ error }}</div>
     {% endif %}
 
-    <!-- MKG Environment Settings -->
+    <!-- MKG koppeling -->
     <div class="card">
-        <h2 style="margin-bottom:.4rem;color:#2c3e50;">MKG Omgevingsinstellingen</h2>
-        <p style="color:#777;margin-bottom:1.5rem;font-size:.95rem;">
-            Koppel uw MKG ERP-omgeving. Credentials worden versleuteld opgeslagen.
-        </p>
+        <h2>MKG Omgevingsinstellingen</h2>
+        <p class="card-sub">Koppel uw MKG ERP-omgeving. Credentials worden versleuteld opgeslagen.</p>
 
         <form method="post" action="/settings">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="settings-row">
 
-                <div style="grid-column:1/-1;">
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Base URL</label>
-                    <input type="url" name="mkg_base_url" value="{{ env.mkg_base_url or '' }}"
-                        placeholder="https://uw-mkg-server.nl"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
-                    <small style="color:#999;">Basis-URL van uw MKG installatie (zonder pad)</small>
+                <div class="form-group full">
+                    <label>MKG Base URL</label>
+                    <input type="url" name="mkg_base_url" value="{{ env.mkg_base_url or '' }}" placeholder="https://uw-mkg-server.nl">
+                    <small>Basis-URL van uw MKG installatie (zonder pad)</small>
                 </div>
 
-                <div>
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Context pad</label>
-                    <input type="text" name="mkg_context_path" value="{{ env.mkg_context_path or '/mkg' }}"
-                        placeholder="/mkg"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                <div class="form-group">
+                    <label>Context pad</label>
+                    <input type="text" name="mkg_context_path" value="{{ env.mkg_context_path or '/mkg' }}" placeholder="/mkg">
                 </div>
 
-                <div>
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">API Key (X-CustomerID)</label>
-                    <input type="text" name="mkg_api_key" value="{{ env.mkg_api_key or '' }}"
-                        placeholder="uw-api-key"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                <div class="form-group">
+                    <label>API Key (X-CustomerID)</label>
+                    <input type="text" name="mkg_api_key" value="{{ env.mkg_api_key or '' }}" placeholder="uw-api-key">
                 </div>
 
-                <div>
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Gebruikersnaam</label>
-                    <input type="text" name="mkg_username" value="{{ env.mkg_username or '' }}"
-                        placeholder="mkg_gebruiker"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                <div class="form-group">
+                    <label>MKG Gebruikersnaam</label>
+                    <input type="text" name="mkg_username" value="{{ env.mkg_username or '' }}" placeholder="mkg_gebruiker">
                 </div>
 
-                <div style="grid-column:1/-1;">
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">MKG Wachtwoord</label>
+                <div class="form-group full">
+                    <label>MKG Wachtwoord</label>
                     <input type="password" name="mkg_password"
-                        placeholder="{% if env.mkg_password_enc %}Wachtwoord opgeslagen — laat leeg om ongewijzigd te laten{% else %}Voer wachtwoord in{% endif %}"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
-                    <small style="color:#999;">Laat leeg om het huidige wachtwoord te behouden</small>
+                        placeholder="{% if env.mkg_password_enc %}Opgeslagen — leeg laten om te behouden{% else %}Voer wachtwoord in{% endif %}">
+                    <small>Laat leeg om het huidige wachtwoord te behouden</small>
                 </div>
 
-                <div>
-                    <label style="display:block;margin-bottom:.4rem;font-weight:600;color:#555;">Standaard staaflengte (mm)</label>
-                    <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}"
-                        min="100" step="1"
-                        style="width:100%;padding:.65rem .9rem;border:1px solid #ddd;border-radius:4px;font-size:.95rem;">
+                <div class="form-group">
+                    <label>Standaard staaflengte (mm)</label>
+                    <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}" min="100" step="1">
                 </div>
 
-                <div style="display:flex;align-items:center;gap:.75rem;padding-top:1.5rem;">
-                    <input type="checkbox" name="use_mkg" id="use_mkg" value="true"
-                        {% if env.use_mkg %}checked{% endif %}
-                        style="width:18px;height:18px;cursor:pointer;">
-                    <label for="use_mkg" style="font-weight:600;color:#555;cursor:pointer;">
-                        Echte MKG data gebruiken
-                    </label>
+                <div class="checkbox-row">
+                    <input type="checkbox" name="use_mkg" id="use_mkg" value="true" {% if env.use_mkg %}checked{% endif %}>
+                    <label for="use_mkg">Echte MKG data gebruiken</label>
                 </div>
+
             </div>
 
-            <div style="margin-top:1.75rem;display:flex;gap:1rem;">
-                <button type="submit" class="btn" style="padding:.7rem 2rem;">
-                    Opslaan
-                </button>
+            <div class="settings-actions">
+                <button type="submit" class="btn" style="padding: .65rem 2rem;">Opslaan</button>
             </div>
         </form>
     </div>
 
     <!-- Webhook URL -->
-    <div class="card" style="margin-top:1rem;">
-        <h3 style="margin-bottom:.5rem;color:#2c3e50;">Webhook URL</h3>
-        <p style="color:#777;font-size:.95rem;margin-bottom:1rem;">
-            Configureer deze URL als webhook-doel in MKG. De URL is uniek voor uw omgeving.
-        </p>
+    <div class="card">
+        <h3>Webhook URL</h3>
+        <p class="card-sub">Configureer deze URL als webhook-doel in MKG. De URL is uniek voor uw omgeving.</p>
 
-        <div style="background:#f8f9fa;padding:1rem;border-radius:4px;border:1px solid #dee2e6;word-break:break-all;font-family:monospace;font-size:.9rem;">
-            {{ webhook_url }}
-        </div>
+        <div class="mono">{{ webhook_url }}</div>
 
-        <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
-            <button onclick="copyWebhook()" class="btn" style="background:#27ae60;">
-                📋 Kopieer URL
-            </button>
-            <form method="post" action="/settings/regen-webhook" style="display:inline;">
-                <button type="submit" class="btn" style="background:#e67e22;"
+        <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+            <button onclick="copyWebhook()" class="btn btn-success">Kopieer URL</button>
+            <form method="post" action="/settings/regen-webhook" style="display: inline;">
+                <button type="submit" class="btn btn-copper"
                     onclick="return confirm('Weet u zeker dat u een nieuwe webhook-token wilt genereren? De oude URL werkt dan niet meer.')">
-                    🔄 Nieuwe token genereren
+                    Nieuwe token genereren
                 </button>
             </form>
         </div>
 
-        <p style="color:#e67e22;font-size:.85rem;margin-top:.75rem;">
-            ⚠️ Bewaar de token geheim. Iedereen met deze URL kan orders aanmaken in uw omgeving.
+        <p class="webhook-warning">
+            <span>&#9888;</span>
+            <span>Bewaar de token geheim. Iedereen met deze URL kan orders aanmaken in uw omgeving.</span>
         </p>
     </div>
 
-    <!-- Account info -->
-    <div class="card" style="margin-top:1rem;">
-        <h3 style="margin-bottom:.5rem;">Account</h3>
-        <table style="width:auto;">
-            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">Naam</th><td>{{ current_user.username }}</td></tr>
-            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">E-mail</th><td>{{ current_user.email }}</td></tr>
-            <tr><th style="padding:.4rem 1rem .4rem 0;text-align:left;">Lid sinds</th><td>{{ current_user.created_at.strftime('%d-%m-%Y') }}</td></tr>
+    <!-- Account -->
+    <div class="card">
+        <h3>Account</h3>
+        <table class="account-table" style="margin-top: .75rem;">
+            <tr>
+                <th>Naam</th>
+                <td>{{ current_user.username }}</td>
+            </tr>
+            <tr>
+                <th>E-mail</th>
+                <td>{{ current_user.email }}</td>
+            </tr>
+            <tr>
+                <th>Lid sinds</th>
+                <td>{{ current_user.created_at.strftime('%d-%m-%Y') }}</td>
+            </tr>
         </table>
     </div>
+
 </div>
 
 <script>
 function copyWebhook() {
-    const url = "{{ webhook_url }}";
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText("{{ webhook_url }}").then(() => {
         alert("Webhook URL gekopieerd!");
     });
 }

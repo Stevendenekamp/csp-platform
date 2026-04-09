@@ -32,6 +32,13 @@ def _apply_migrations():
         # Status-koppeling zaagplan aan inkooporder
         "ALTER TABLE cutting_plans ADD COLUMN purchase_order_id INTEGER REFERENCES purchase_orders(id)",
     ]
+
+    # Normaliseer hoofdletters in status-waarden (bijv. 'COMPLETED' → 'completed').
+    # Dit lost een migratie-mismatch op waarbij enum-namen (uppercase) opgeslagen
+    # werden in plaats van enum-waarden (lowercase).
+    status_fix_migrations = [
+        "UPDATE cutting_plans SET status = LOWER(status) WHERE status <> LOWER(status)",
+    ]
     with engine.connect() as conn:
         for stmt in migrations:
             try:
@@ -40,6 +47,16 @@ def _apply_migrations():
             except Exception:
                 # Column already exists → rollback and continue (required for PostgreSQL)
                 conn.rollback()
+
+        # Voer status-normalisatie altijd uit (is idempotent)
+        for stmt in status_fix_migrations:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                import logging as _log
+                _log.getLogger(__name__).warning("Status fix migration mislukt: %s", e)
 
 
 def init_db():

@@ -43,29 +43,50 @@ def _apply_migrations():
 
 
 def init_db():
-    # Voor PostgreSQL: maak enum type aan met IF NOT EXISTS (idempotent)
+    # Voor PostgreSQL: enum type + nieuwe waarden idempotent toevoegen
     if "postgresql" in _db_url:
-        with engine.connect() as conn:
-            try:
-                conn.execute(text(
-                    "CREATE TYPE IF NOT EXISTS optimizationstatus AS ENUM "
-                    "('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')"
-                ))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-            # Voeg nieuwe enum waarden toe (idempotent via IF NOT EXISTS)
-            for val in ("geoptimaliseerd", "inkooporder_aangemaakt"):
-                try:
-                    conn.execute(text(
-                        f"ALTER TYPE optimizationstatus ADD VALUE IF NOT EXISTS '{val}'"
-                    ))
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
+        # ALTER TYPE ADD VALUE mag NIET in een transactie (PostgreSQL beperking).
+        # Gebruik een aparte autocommit-verbinding.
+        raw_conn = engine.raw_connection()
+        try:
+            raw_conn.set_isolation_level(0)  # AUTOCOMMIT
+            cur = raw_conn.cursor()
+
+            # Maak het enum type aan als het nog niet bestaat
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_type WHERE typname = 'optimizationstatus'
+                    ) THEN
+                        CREATE TYPE optimizationstatus AS ENUM (
+                            'pending', 'processing', 'completed', 'failed',
+                            'geoptimaliseerd', 'inkooporder_aangemaakt'
+                        );
+                    END IF;
+                END$$;
+            """)
+
+            # Voeg nieuwe waarden toe als ze nog niet bestaan
+            for val in ("geoptimaliseerd", "inkooporder_aangemaakt", "completed", "failed", "pending", "processing"):
+                cur.execute(f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_enum e
+                            JOIN pg_type t ON t.oid = e.enumtypid
+                            WHERE t.typname = 'optimizationstatus'
+                              AND e.enumlabel = '{val}'
+                        ) THEN
+                            ALTER TYPE optimizationstatus ADD VALUE '{val}';
+                        END IF;
+                    END$$;
+                """)
+            cur.close()
+        finally:
+            raw_conn.close()
 
     # checkfirst=True: sla CREATE TABLE over als tabel al bestaat
-    # zodat meerdere gunicorn workers veilig tegelijk kunnen opstarten
     Base.metadata.create_all(bind=engine, checkfirst=True)
     _apply_migrations()
 

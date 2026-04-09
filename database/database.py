@@ -27,6 +27,10 @@ def _apply_migrations():
         "ALTER TABLE material_orders ADD COLUMN mkg_rowkey VARCHAR",
         # Multi-tenant: link orders to users (nullable for backward compat)
         "ALTER TABLE material_orders ADD COLUMN user_id INTEGER REFERENCES users(id)",
+        # Configureerbaar crediteurnummer voor inkooporders
+        "ALTER TABLE tenant_environments ADD COLUMN mkg_cred_num INTEGER",
+        # Status-koppeling zaagplan aan inkooporder
+        "ALTER TABLE cutting_plans ADD COLUMN purchase_order_id INTEGER REFERENCES purchase_orders(id)",
     ]
     with engine.connect() as conn:
         for stmt in migrations:
@@ -50,6 +54,15 @@ def init_db():
                 conn.commit()
             except Exception:
                 conn.rollback()
+            # Voeg nieuwe enum waarden toe (idempotent via IF NOT EXISTS)
+            for val in ("geoptimaliseerd", "inkooporder_aangemaakt"):
+                try:
+                    conn.execute(text(
+                        f"ALTER TYPE optimizationstatus ADD VALUE IF NOT EXISTS '{val}'"
+                    ))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
 
     # checkfirst=True: sla CREATE TABLE over als tabel al bestaat
     # zodat meerdere gunicorn workers veilig tegelijk kunnen opstarten

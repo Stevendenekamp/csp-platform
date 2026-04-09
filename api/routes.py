@@ -2,11 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, 
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from collections import defaultdict
+import asyncio
+import httpx
 import logging
 from datetime import datetime
 
 from database.database import get_db
-from database.models import MaterialOrder, MaterialLine, CuttingPlan, OptimizationStatus, TenantEnvironment
+from database.models import (
+    MaterialOrder, MaterialLine, CuttingPlan, OptimizationStatus,
+    TenantEnvironment, PurchaseOrder, PurchaseOrderLine,
+)
 from api.schemas import (
     MaterialOrderCreate, MaterialOrderResponse,
     CuttingPlanResponse, WebhookPayload
@@ -26,63 +31,137 @@ router = APIRouter()
 
 def _ascii_cutting_plan(order: MaterialOrder, result: dict) -> str:
     """Genereer een leesbare ASCII tabel van het zaagplan voor in de MKG memo."""
-    settings = get_settings()
     now = datetime.utcnow().strftime("%d-%m-%Y %H:%M")
-    lines = []
 
-    def hr(left="├", mid="┼", right="┤", fill="─", widths=None):
-        return left + mid.join(fill * w for w in widths) + right
+    W    = 64          # totale breedte van elke regel
+    SEP  = "=" * W
+    DASH = "-" * W
 
-    lines.append("╔" + "═" * 62 + "╗")
-    lines.append("║  ZAAGPLAN" + " " * 52 + "║")
-    lines.append("╠" + "═" * 62 + "╣")
-    lines.append(f"║  Aanvraag : {order.order_id:<49}║")
-    lines.append(f"║  Artikel  : {order.article_code:<49}║")
-    lines.append(f"║  Staaflengte: {int(order.stock_length)} mm" + " " * (47 - len(str(int(order.stock_length)))) + "║")
-    lines.append(f"║  Gegenereerd: {now:<48}║")
-    lines.append("╠" + "═" * 62 + "╣")
+    def fld(label: str, value: str) -> str:
+        """Label links op vaste breedte (20), waarde daarna links uitgelijnd."""
+        return f"  {label:<20} {value}"
+
+    def fmt_mm(val) -> str:
+        n = int(val) if isinstance(val, float) and val == int(val) else val
+        s = f"{n:,}".replace(",", ".")
+        return f"{s} mm"
 
     summary = result.get("summary", {})
-    lines.append(f"║  Staven nodig : {result.get('total_stock_used','?'):<45}║")
-    lines.append(f"║  Totaal stukken: {summary.get('total_pieces','?'):<44}║")
-    lines.append(f"║  Gem. efficiëntie: {summary.get('average_efficiency',0):.1f}%{' ':<41}║")
-    lines.append(f"║  Totaal afval : {result.get('total_waste',0):.0f} mm{' ':<43}║")
-    lines.append("╠" + "═" * 62 + "╣")
+    eff     = summary.get("average_efficiency", 0)
+    waste   = result.get("total_waste", 0)
 
-    # Staven tabel
-    # Kolom breedtes: staaf(6) snedes(36) stuks(6) eff(12)
-    W = [6, 36, 6, 10]
-    lines.append("║ " + "┌" + "┬".join("─" * w for w in W) + "┐" + " ║")
-    def row(cells):
-        parts = [f" {c:<{W[i]}} " for i, c in enumerate(cells)]
-        return "║ │" + "│".join(parts) + "│ ║"
-    lines.append(row(["Staaf", "Snedes (lengte×aantal)", "Stuks", "Efficiëntie"]))
-    lines.append("║ " + "├" + "┼".join("─" * (w+2) for w in W) + "┤" + " ║")
+    lines = [
+        SEP,
+        f"  ZAAGPLAN",
+        SEP,
+        fld("Aanvraag      :", str(order.order_id)[:42]),
+        fld("Artikel       :", str(order.article_code)[:42]),
+        fld("Staaflengte   :", fmt_mm(order.stock_length)),
+        fld("Gegenereerd   :", now),
+        DASH,
+        fld("Staven nodig  :", str(result.get("total_stock_used", "?"))),
+        fld("Totaal stukken:", str(summary.get("total_pieces", "?"))),
+        fld("Gem. efficientie:", f"{eff:.1f}%"),
+        fld("Totaal afval  :", fmt_mm(waste)),
+        DASH,
+    ]
 
-    cutting_plan = result.get("cutting_plan", [])
-    for stock in cutting_plan:
-        # Groepeer snedes per lengte
+    # ── Staven tabel ──
+    # Kolom breedtes (excl. spaties/scheidingstekens):
+    #   Nr(3) | Snedes(35) | St(4) | Eff(7)
+    # Opbouw: "  " + nr + " | " + snedes + " | " + st + " | " + eff
+    # = 2 + 3 + 3 + 35 + 3 + 4 + 3 + 7 = 60 → past binnen W=64
+    NC, SC, TC, EC = 3, 35, 4, 7
+
+    def trow(nr, snedes, st, eff):
+        return f"  {nr:<{NC}} | {snedes:<{SC}} | {str(st):>{TC}} | {eff:>{EC}}"
+
+    def tsep():
+        return "  " + "-" * (NC + 2) + "+" + "-" * (SC + 2) + "+" + "-" * (TC + 2) + "+" + "-" * (EC + 2)
+
+    lines.append(trow("Nr", "Snedes (lengte x aantal)", "St.", "Eff."))
+    lines.append(tsep())
+
+    for stock in result.get("cutting_plan", []):
         counts: dict = {}
         for cut in stock.get("cuts", []):
             l = int(cut["length"])
             counts[l] = counts.get(l, 0) + 1
-        pills = "  ".join(f"{l}×{n}" for l, n in sorted(counts.items(), reverse=True))
-        if len(pills) > W[1]:
-            pills = pills[:W[1]-1] + "…"
+        snedes = "  ".join(f"{l}x{n}" for l, n in sorted(counts.items(), reverse=True))
+        if len(snedes) > SC:
+            snedes = snedes[:SC - 1] + "~"
         total_cuts = sum(counts.values())
-        eff = stock.get("efficiency", 0)
-        lines.append(row([
+        eff_pct    = stock.get("efficiency", 0)
+        lines.append(trow(
             str(stock["stock_number"]),
-            pills,
+            snedes,
             str(total_cuts),
-            f"{eff:.1f}%",
-        ]))
+            f"{eff_pct:.1f}%",
+        ))
 
-    lines.append("║ " + "└" + "┴".join("─" * (w+2) for w in W) + "┘" + " ║")
-    lines.append("╚" + "═" * 62 + "╝")
-
+    lines.append(SEP)
     return "\n".join(lines)
 
+
+def _prmv_verdeling_memo(
+    order_id: str,
+    arti_code: str,
+    prmv_lengte: float,
+    totaal_aantal: float,
+    netto_mm: float,
+    share_pct: float,
+    waste_share_mm: float,
+    total_waste_mm: float,
+    qty_to_reserve: float,
+) -> str:
+    """Genereer een leesbare memo met de verdeelsleutelberekening voor prmv_memo."""
+    datum = datetime.utcnow().strftime("%d-%m-%Y")
+
+    W    = 64
+    SEP  = "=" * W
+    DASH = "-" * W
+
+    def fmt(val: float, dec: int = 0) -> str:
+        s = f"{val:,.{dec}f}"
+        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def fld(label: str, value: str) -> str:
+        """Label links op vaste breedte (24), waarde daarna links uitgelijnd."""
+        return f"  {label:<24} {value}"
+
+    val_line = "-" * 14  # scheidingslijn boven totaalregel
+
+    lines = [
+        SEP,
+        "  VERDEELSLEUTEL ZAAGVERLIES",
+        SEP,
+        fld("Order   :", str(order_id)[:42]),
+        fld("Artikel :", str(arti_code)[:42]),
+        fld("Datum   :", datum),
+        "",
+        "  BEREKENING",
+        DASH,
+        fld("Lengte per stuk      :", f"{fmt(prmv_lengte)} mm"),
+        fld("Aantal stuks         :", f"{fmt(totaal_aantal)} st"),
+        fld("Netto materiaal      :", f"{fmt(netto_mm)} mm  (lengte x aantal)"),
+        "",
+        fld("Gewogen sleutel      :", fmt(netto_mm * prmv_lengte)),
+        "    Langere stukken krijgen relatief meer zaagverlies,",
+        "    omdat elke zaagsnede een groter deel van hun lengte beslaat.",
+        "",
+        fld("Aandeel in afval     :", f"{share_pct:.1f}%"),
+        fld("Totaal afval (plan)  :", f"{fmt(total_waste_mm)} mm"),
+        fld("Zaagverlies aandeel  :", f"{fmt(waste_share_mm)} mm  ({share_pct:.1f}% van {fmt(total_waste_mm)} mm)"),
+        "",
+        "  RESERVERING",
+        DASH,
+        fld("Netto materiaal      :", f"{fmt(netto_mm)} mm"),
+        fld("+ Zaagverlies        :", f"{fmt(waste_share_mm)} mm"),
+        "  " + " " * 25 + val_line,
+        fld("= Totaal reservering :", f"{fmt(qty_to_reserve)} mm"),
+        SEP,
+    ]
+    return "\n".join(lines)
 
 # ---------------------------------------------------------------------------
 # Background optimization task
@@ -117,7 +196,7 @@ async def process_cutting_optimization(order_id: int, db: Session):
         optimizer = CuttingOptimizer(stock_length=order.stock_length, saw_kerf=3.0)
         result = optimizer.optimize(required_pieces)
 
-        cutting_plan.status = OptimizationStatus.COMPLETED
+        cutting_plan.status = OptimizationStatus.GEOPTIMALISEERD
         cutting_plan.total_stock_used = result['total_stock_used']
         cutting_plan.total_waste = result['total_waste']
         cutting_plan.waste_percentage = result['waste_percentage']
@@ -485,6 +564,513 @@ def list_cutting_plans(
         MaterialOrder.user_id == current_user.id
     ).order_by(CuttingPlan.created_at.desc()).offset(skip).limit(limit).all()
     return plans
+
+
+# ---------------------------------------------------------------------------
+# Purchase orders — zaagplannen omzetten naar inkooporder
+# ---------------------------------------------------------------------------
+
+@router.post("/purchase-orders")
+async def create_purchase_order(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Maakt één inkooporder aan op basis van één of meerdere geselecteerde zaagplannen.
+
+    Body (JSON of form): {"cutting_plan_order_ids": ["order_id_1", "order_id_2"]}
+
+    Stappen:
+    1. Valideer zaagplannen (bestaan, eigenaar, mkg_rowkey aanwezig).
+    2. Haal per zaagplan de prmv materiaalregels op uit MKG.
+    3. Aggregeer per arti_code; sommeer iorr_order_aantal over alle zaagplannen.
+    4. Maak iorh header aan (cred_num 99999).
+    5. Maak per arti_code een iorr regel aan.
+    6. Haal pamt op voor de nieuwe iorh → mapping iorr_num → pamt_rowkey.
+    7. Maak per prmv-regel een reservering via s_createreservation.
+    8. Sla PurchaseOrder + PurchaseOrderLines op in de lokale DB.
+    """
+    # Accepteer zowel JSON als form-data (HTML form POST)
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        body = await request.json()
+        cutting_plan_order_ids = body.get("cutting_plan_order_ids", [])
+    else:
+        form = await request.form()
+        cutting_plan_order_ids = form.getlist("cutting_plan_order_ids")
+
+    if not cutting_plan_order_ids:
+        raise HTTPException(status_code=422, detail="Geen zaagplannen geselecteerd")
+
+    # ── Stap 1: valideer geselecteerde zaagplannen ──────────────────────────
+    orders = (
+        db.query(MaterialOrder)
+        .filter(
+            MaterialOrder.order_id.in_(cutting_plan_order_ids),
+            MaterialOrder.user_id == current_user.id,
+        )
+        .all()
+    )
+    found_ids = {o.order_id for o in orders}
+    missing = set(cutting_plan_order_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Zaagplannen niet gevonden: {missing}")
+
+    for o in orders:
+        if not o.mkg_document or not o.mkg_rowkey:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Zaagplan '{o.order_id}' heeft geen MKG koppeling (mkg_rowkey ontbreekt)",
+            )
+
+    # Haal MKG client op
+    env = (
+        db.query(TenantEnvironment)
+        .filter(TenantEnvironment.user_id == current_user.id)
+        .first()
+    )
+    if not env or not env.use_mkg:
+        raise HTTPException(
+            status_code=400,
+            detail="MKG is niet ingeschakeld. Schakel gebruik MKG in via omgevingsinstellingen.",
+        )
+
+    client = get_mkg_client_for_env(env)
+
+    # ── Stap 2: prmv regels ophalen per zaagplan ────────────────────────────
+    # aggregation: arti_code -> {"total_qty": float, "prmv_lines": [{...}]}
+    aggregated: dict = {}
+    # ook per order bewaren voor logging
+    all_prmv_by_order: dict = {}
+
+    for order in orders:
+        try:
+            prmv_lines = await client.get_production_order_materials(
+                order.mkg_document, order.mkg_rowkey
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"prmv ophalen mislukt voor '{order.order_id}': {e}",
+            )
+
+        all_prmv_by_order[order.order_id] = prmv_lines
+
+        # Aantal staven = total_stock_used uit het zaagplan (niet totaal_aantal = stuks)
+        stock_used = (
+            order.cutting_plan.total_stock_used
+            if order.cutting_plan and order.cutting_plan.total_stock_used
+            else 0
+        )
+
+        # Alleen de prmv-regels van het artikel van dit zaagplan verwerken.
+        # Een iofa kan meerdere materialen bevatten (voor andere zaagplannen in
+        # dezelfde iofa). We kijken dus uitsluitend naar regels die overeenkomen
+        # met order.article_code zodat niet-geselecteerde zaagplannen worden
+        # overgeslagen.
+        arti_code = order.article_code or "UNKNOWN"
+        matching_lines = [
+            l for l in prmv_lines if l.get("arti_code") == arti_code
+        ]
+
+        if not matching_lines:
+            logger.warning(
+                f"Geen prmv-regels gevonden voor arti_code='{arti_code}' "
+                f"in order '{order.order_id}' — alle prmv arti_codes: "
+                f"{[l.get('arti_code') for l in prmv_lines]}"
+            )
+
+        if arti_code not in aggregated:
+            aggregated[arti_code] = {"total_qty": 0, "total_waste_mm": 0.0, "orders": [], "prmv_lines": []}
+        aggregated[arti_code]["total_qty"] += stock_used
+        aggregated[arti_code]["total_waste_mm"] += float(order.cutting_plan.total_waste or 0) if order.cutting_plan else 0.0
+        aggregated[arti_code]["orders"].append(order)
+        aggregated[arti_code]["prmv_lines"].extend(matching_lines)
+
+    if not aggregated:
+        raise HTTPException(status_code=422, detail="Geen materiaalregels gevonden in MKG")
+
+    # ── Stap 3: inkooporder header aanmaken ────────────────────────────────
+    cred_num = env.mkg_cred_num
+    if not cred_num:
+        raise HTTPException(
+            status_code=422,
+            detail="Crediteur nummer (cred_num) is niet ingesteld. Stel dit in via Instellingen → Crediteur nummer.",
+        )
+    try:
+        iorh_data = await client.create_purchase_order_header(cred_num=cred_num)
+    except Exception as e:
+        # Probeer de MKG response body uit de HTTPStatusError te halen
+        import httpx as _httpx
+        mkg_detail = str(e)
+        if isinstance(e, _httpx.HTTPStatusError):
+            try:
+                mkg_detail = e.response.json()
+            except Exception:
+                mkg_detail = e.response.text[:500]
+        raise HTTPException(status_code=502, detail=f"iorh aanmaken mislukt: {mkg_detail}")
+
+    iorh_num = iorh_data.get("iorh_num")
+    admi_num = iorh_data.get("admi_num")
+    iorh_rowkey = iorh_data.get("RowKey")
+
+    if not iorh_num:
+        raise HTTPException(status_code=502, detail="MKG gaf geen iorh_num terug")
+
+    logger.info(f"iorh aangemaakt: iorh_num={iorh_num}, admi_num={admi_num}")
+
+    # ── Stap 4: per arti_code een iorr regel aanmaken ──────────────────────
+    # arti_code -> {"iorr_num": ..., "iorr_rowkey": ...}
+    iorr_map: dict = {}
+    po_lines_data: list = []
+
+    for arti_code, info in aggregated.items():
+        try:
+            iorr_data = await client.create_purchase_order_line(
+                iorh_num=iorh_num,
+                arti_code=arti_code,
+                quantity=info["total_qty"],
+            )
+        except Exception as e:
+            logger.error(f"iorr aanmaken mislukt voor {arti_code}: {e}")
+            iorr_data = {}
+
+        iorr_num = iorr_data.get("iorr_num")
+        iorr_rowkey = iorr_data.get("RowKey")
+        iorr_map[arti_code] = {"iorr_num": iorr_num, "iorr_rowkey": iorr_rowkey}
+
+        # Schrijf het zaagplan terug naar iorr_memo_intern
+        if iorr_num is not None:
+            memo_lines = []
+            for _order in aggregated[arti_code]["orders"]:
+                if _order.cutting_plan and _order.cutting_plan.optimization_data:
+                    memo_lines.append(
+                        _ascii_cutting_plan(_order, _order.cutting_plan.optimization_data)
+                    )
+            if memo_lines:
+                iorr_memo = ("\n\n" + "=" * 64 + "\n\n").join(memo_lines)
+                try:
+                    await client.update_iorr_memo(
+                        admi_num=admi_num,
+                        iorh_num=iorh_num,
+                        iorr_num=iorr_num,
+                        memo_intern=iorr_memo,
+                    )
+                    logger.info(f"iorr_memo_intern geschreven voor iorr {admi_num}+{iorh_num}+{iorr_num}")
+                except Exception as e:
+                    logger.warning(f"iorr_memo_intern schrijven mislukt: {e}")
+
+        po_lines_data.append(
+            {
+                "arti_code": arti_code,
+                "quantity": info["total_qty"],
+                "iorr_num": iorr_num,
+                "iorr_rowkey": iorr_rowkey,
+            }
+        )
+        logger.info(f"iorr aangemaakt: iorh_num={iorh_num}, arti_code={arti_code}, iorr_num={iorr_num}")
+
+    # ── Stap 5: pamt ophalen → iorr_num -> pamt_rowkey ─────────────────────
+    # MKG verwerkt iorr-regels asynchroon; wacht tot pamt gevuld is (max ~10s)
+    expected_count = len(iorr_map)  # verwacht 1 pamt-rij per iorr-regel
+    pamt_lines: list = []
+    for attempt in range(1, 7):  # max 6 pogingen
+        await asyncio.sleep(2)   # wacht 2 seconden per poging
+        try:
+            pamt_lines = await client.get_pamt_for_order(iorh_num)
+        except Exception as e:
+            logger.warning(f"pamt ophalen mislukt (poging {attempt}): {e}")
+            continue
+        if len(pamt_lines) >= expected_count:
+            logger.info(f"pamt gereed na poging {attempt}: {len(pamt_lines)} regels")
+            break
+        logger.info(
+            f"pamt nog niet klaar (poging {attempt}): "
+            f"{len(pamt_lines)}/{expected_count} regels — opnieuw proberen..."
+        )
+    else:
+        logger.warning(
+            f"pamt onvolledig na 6 pogingen: {len(pamt_lines)}/{expected_count} regels. "
+            "Doorgaan met wat er is."
+        )
+
+    # Bouw mapping: iorr_num (int) -> RowKey van pamt
+    pamt_map: dict = {}
+    for p in pamt_lines:
+        rn = p.get("iorr_num")
+        rk = p.get("RowKey")
+        if rn is not None and rk and int(rn) not in pamt_map:
+            pamt_map[int(rn)] = rk
+
+    logger.info(f"pamt map: {pamt_map}")
+
+    # ── Stap 6: reserveringen aanmaken per prmv-regel ──────────────────────
+    reservation_results: dict = {}  # arti_code -> [result, ...]
+
+    for arti_code, info in aggregated.items():
+        iorr_info = iorr_map.get(arti_code, {})
+        iorr_num = iorr_info.get("iorr_num")
+        pamt_rowkey = pamt_map.get(int(iorr_num)) if iorr_num is not None else None
+
+        reservation_results[arti_code] = []
+
+        if not pamt_rowkey:
+            logger.warning(
+                f"Geen pamt_rowkey gevonden voor arti_code={arti_code}, "
+                f"iorr_num={iorr_num} — reservering overgeslagen"
+            )
+            reservation_results[arti_code].append({"skipped": True, "reason": "geen pamt_rowkey"})
+            continue
+
+        # ── Verdeelsleutel: bereken gewogen aandeel per prmv-regel ──────────
+        # weight_i = netto_mm_i × prmv_lengte_i
+        # Langere stukken krijgen relatief meer zaagverlies omdat elke zaagsnede
+        # een groter deel van hun lengte beslaat.
+        total_waste_mm = info["total_waste_mm"]
+        line_data_weighted = []
+        for line in info["prmv_lines"]:
+            lengte = float(line.get("prmv_lengte") or 0)
+            aantal = float(line.get("totaal_aantal") or 0)
+            netto_mm = lengte * aantal
+            weight = netto_mm * lengte  # dual component: volume × lengte
+            line_data_weighted.append((line, lengte, aantal, netto_mm, weight))
+
+        total_weight   = sum(w   for _, _, _, _, w   in line_data_weighted)
+        total_netto_mm = sum(n   for _, _, _, n, _   in line_data_weighted)
+
+        for line, prmv_lengte, totaal_aantal, netto_mm, weight in line_data_weighted:
+            prdh_num = line.get("prdh_num")
+            prdr_num = line.get("prdr_num")
+            prmv_num = line.get("prmv_num")
+
+            if not all([prdh_num, prdr_num, prmv_num]):
+                logger.warning(f"prmv regel mist prdh_num/prdr_num/prmv_num: {line}")
+                reservation_results[arti_code].append(
+                    {"skipped": True, "reason": "ontbrekende prmv sleutels", "line": line}
+                )
+                continue
+
+            # Verdeel zaagverlies proportioneel
+            share = (weight / total_weight) if total_weight > 0 else 0
+            waste_share_mm = share * total_waste_mm
+            qty_to_reserve = netto_mm + waste_share_mm
+            share_pct = share * 100
+
+            # Afrondingscorrectie op de laatste regel:
+            # zorg dat sum(reserveringen) == totaal_netto + totaal_afval
+            is_last = (line == line_data_weighted[-1][0])
+            if is_last:
+                already_reserved = sum(
+                    r["qty_mm"]
+                    for r in reservation_results[arti_code]
+                    if isinstance(r.get("qty_mm"), (int, float))
+                )
+                total_target = total_netto_mm + total_waste_mm
+                qty_to_reserve = total_target - already_reserved
+            order_id_for_memo = (
+                info["orders"][0].order_id if info.get("orders") else "?"
+            )
+            memo_text = _prmv_verdeling_memo(
+                order_id=order_id_for_memo,
+                arti_code=arti_code,
+                prmv_lengte=prmv_lengte,
+                totaal_aantal=totaal_aantal,
+                netto_mm=netto_mm,
+                share_pct=share_pct,
+                waste_share_mm=waste_share_mm,
+                total_waste_mm=total_waste_mm,
+                qty_to_reserve=qty_to_reserve,
+            )
+            await client.update_prmv_memo(
+                admi_num=admi_num,
+                prdh_num=prdh_num,
+                prdr_num=prdr_num,
+                prmv_num=prmv_num,
+                memo=memo_text,
+            )
+
+            res = await client.create_reservation(
+                admi_num=admi_num,
+                prdh_num=prdh_num,
+                prdr_num=prdr_num,
+                prmv_num=prmv_num,
+                pamt_rowkey=pamt_rowkey,
+                quantity=qty_to_reserve,
+                unit="mm",
+            )
+            reservation_results[arti_code].append(
+                {"prmv_num": prmv_num, "netto_mm": netto_mm,
+                 "waste_share_mm": round(waste_share_mm, 1),
+                 "qty_mm": round(qty_to_reserve, 1), "result": res}
+            )
+            logger.info(
+                f"Reservering: prmv={admi_num}+{prdh_num}+{prdr_num}+{prmv_num}, "
+                f"netto={netto_mm:.0f}mm + afval={waste_share_mm:.0f}mm "
+                f"({share_pct:.1f}%) = {qty_to_reserve:.0f}mm"
+            )
+
+    # ── Stap 7: opslaan in lokale DB ───────────────────────────────────────
+    purchase_order = PurchaseOrder(
+        user_id=current_user.id,
+        iorh_num=iorh_num,
+        admi_num=admi_num,
+        iorh_rowkey=iorh_rowkey,
+        cred_num=cred_num,
+        cutting_plan_order_ids=list(cutting_plan_order_ids),
+    )
+    db.add(purchase_order)
+    db.flush()
+
+    for line_data in po_lines_data:
+        db.add(
+            PurchaseOrderLine(
+                purchase_order_id=purchase_order.id,
+                iorr_num=line_data["iorr_num"],
+                iorr_rowkey=line_data["iorr_rowkey"],
+                arti_code=line_data["arti_code"],
+                quantity=line_data["quantity"],
+                reservation_results=reservation_results.get(line_data["arti_code"]),
+            )
+        )
+
+    db.commit()
+    db.refresh(purchase_order)
+
+    # Update status van alle geselecteerde zaagplannen → inkooporder_aangemaakt
+    for order in orders:
+        if order.cutting_plan:
+            order.cutting_plan.status = OptimizationStatus.INKOOPORDER_AANGEMAAKT
+            order.cutting_plan.purchase_order_id = purchase_order.id
+    db.commit()
+
+    logger.info(
+        f"PurchaseOrder {purchase_order.id} opgeslagen: iorh_num={iorh_num}, "
+        f"{len(po_lines_data)} regels"
+    )
+
+    return {"purchase_order_id": purchase_order.id, "iorh_num": iorh_num}
+
+
+@router.get("/purchase-orders/{purchase_order_id}")
+def get_purchase_order(
+    purchase_order_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Haal een inkooporder op met alle regels."""
+    po = (
+        db.query(PurchaseOrder)
+        .filter(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not po:
+        raise HTTPException(status_code=404, detail="Inkooporder niet gevonden")
+    return {
+        "id": po.id,
+        "iorh_num": po.iorh_num,
+        "admi_num": po.admi_num,
+        "cred_num": po.cred_num,
+        "cutting_plan_order_ids": po.cutting_plan_order_ids,
+        "created_at": po.created_at.isoformat() if po.created_at else None,
+        "lines": [
+            {
+                "arti_code": l.arti_code,
+                "quantity": l.quantity,
+                "iorr_num": l.iorr_num,
+                "reservation_results": l.reservation_results,
+            }
+            for l in po.lines
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Purchase orders — verwijderen
+# ---------------------------------------------------------------------------
+
+@router.delete("/purchase-orders/{po_id}")
+async def delete_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Verwijdert een inkooporder uit MKG en synchroniseert dit naar de lokale database.
+
+    Logica per iorr / iorh:
+    - Probeer DELETE in MKG.
+    - Bij 404-respons → doe een GET om te bevestigen dat de regel echt verdwenen is.
+      -> Niet aanwezig: al verwijderd in MKG, sync naar lokale DB.
+      -> Nog aanwezig:  onverwachte situatie, geef 502 terug.
+
+    Na succesvol verwijderen:
+    - Reset alle gekoppelde CuttingPlan statussen naar GEOPTIMALISEERD.
+    - Verwijder purchase_order_id koppeling van die zaagplannen.
+    - Verwijder PurchaseOrderLine + PurchaseOrder records uit de lokale DB.
+    """
+    po = db.query(PurchaseOrder).filter(
+        PurchaseOrder.id == po_id,
+        PurchaseOrder.user_id == current_user.id,
+    ).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Inkooporder niet gevonden")
+
+    if po.admi_num is None or not po.iorh_num:
+        raise HTTPException(
+            status_code=422,
+            detail="Inkooporder heeft geen geldige MKG koppeling (admi_num of iorh_num ontbreekt)",
+        )
+
+    env = db.query(TenantEnvironment).filter(TenantEnvironment.user_id == current_user.id).first()
+    if not env or not env.use_mkg:
+        raise HTTPException(status_code=422, detail="MKG niet geconfigureerd voor deze gebruiker")
+
+    mkg = get_mkg_client_for_env(env)
+    try:
+        # ── Stap 1: verwijder alle iorr regels ────────────────────────────
+        # delete_purchase_order_line retourneert True (verwijderd) of None (al weg).
+        # Bij elke andere MKG-fout terwijl de regel nog bestaat, gooit het een exception.
+        for line in po.lines:
+            if line.iorr_num is None:
+                continue
+            result = await mkg.delete_purchase_order_line(po.admi_num, po.iorh_num, line.iorr_num)
+            if result is None:
+                logger.info(f"iorr {line.iorr_num} was al verwijderd in MKG — gesynchroniseerd")
+
+        # ── Stap 2: verwijder iorh header ─────────────────────────────────
+        result = await mkg.delete_purchase_order_header(po.admi_num, po.iorh_num)
+        if result is None:
+            logger.info(f"iorh {po.iorh_num} was al verwijderd in MKG — gesynchroniseerd")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"MKG fout bij verwijderen: HTTP {e.response.status_code} — {e.response.text[:200]}",
+        )
+    finally:
+        await mkg.close()
+
+    # ── Stap 3: sync lokale database ──────────────────────────────────────
+    linked_plans = db.query(CuttingPlan).filter(
+        CuttingPlan.purchase_order_id == po_id
+    ).all()
+    for plan in linked_plans:
+        plan.purchase_order_id = None
+        plan.status = OptimizationStatus.GEOPTIMALISEERD
+
+    for line in list(po.lines):
+        db.delete(line)
+    db.delete(po)
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "iorh_num": po.iorh_num,
+        "reset_cutting_plans": len(linked_plans),
+    }
 
 
 # ---------------------------------------------------------------------------

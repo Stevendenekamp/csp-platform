@@ -4,12 +4,36 @@
 
 {% block content %}
 <div class="card">
-    <h2>Zaagplannen</h2>
-    <p class="card-sub">Overzicht van alle geoptimaliseerde zaagplannen in uw omgeving.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+        <div>
+            <h2>Zaagplannen</h2>
+            <p class="card-sub">Overzicht van alle geoptimaliseerde zaagplannen in uw omgeving.</p>
+        </div>
+        <button id="btn-inkopen" class="btn btn-primary" disabled
+                style="background:var(--orange);color:#fff;border:none;padding:.55rem 1.2rem;border-radius:6px;cursor:pointer;font-size:.9rem;font-weight:600;opacity:.45;"
+                onclick="submitPurchaseOrder()">
+            🛒 Inkopen (<span id="selected-count">0</span>)
+        </button>
+    </div>
+
+    <div id="po-error" style="display:none;margin-top:.75rem;padding:.65rem 1rem;background:var(--danger-bg);color:var(--danger);border-radius:6px;font-size:.875rem;"></div>
+
     {% if plans %}
-    <table>
+    {% set status_labels = {
+      'pending': 'In wachtrij',
+      'processing': 'Wordt verwerkt',
+      'completed': 'Geoptimaliseerd',
+      'geoptimaliseerd': 'Geoptimaliseerd',
+      'inkooporder_aangemaakt': 'Ingekocht',
+      'failed': 'Mislukt'
+    } %}
+    <table style="margin-top:1rem;">
         <thead>
             <tr>
+                <th style="width:2.5rem;">
+                    <input type="checkbox" id="chk-all" title="Selecteer alle beschikbare plannen"
+                           onchange="toggleAll(this)">
+                </th>
                 <th>Plan ID</th>
                 <th>Order ID</th>
                 <th>Artikel</th>
@@ -22,15 +46,29 @@
         </thead>
         <tbody>
             {% for plan in plans %}
+            {% set eligible = plan.status.value in ('completed', 'geoptimaliseerd') and plan.order and plan.order.mkg_rowkey %}
             <tr>
+                <td>
+                    {% if eligible %}
+                    <input type="checkbox" class="plan-chk" value="{{ plan.order.order_id }}"
+                           onchange="updateCount()">
+                    {% else %}
+                    <input type="checkbox" disabled title="Alleen voltooide plannen met MKG-koppeling kunnen worden ingekocht">
+                    {% endif %}
+                </td>
                 <td style="color: var(--text-muted); font-size: .8rem;">{{ plan.id }}</td>
                 <td><strong>{{ plan.order.order_id if plan.order else '—' }}</strong></td>
                 <td>{{ plan.order.article_code if plan.order else '—' }}</td>
-                <td><span class="status {{ plan.status.value }}">{{ plan.status.value }}</span></td>
+                <td><span class="status {{ plan.status.value }}">{{ status_labels.get(plan.status.value, plan.status.value) }}</span></td>
                 <td>{{ plan.total_stock_used or '—' }}</td>
                 <td>{{ "%.1f"|format(plan.waste_percentage) if plan.waste_percentage else '—' }}%</td>
                 <td style="color: var(--text-muted);">{{ plan.created_at.strftime("%d-%m-%Y %H:%M") if plan.created_at else '—' }}</td>
-                <td><a href="/cutting-plans/{{ plan.order_id }}" class="btn">Bekijk</a></td>
+                <td>
+                    <a href="/cutting-plans/{{ plan.order_id }}" class="btn">Bekijk</a>
+                    {% if plan.status.value == 'inkooporder_aangemaakt' and plan.purchase_order_id %}
+                    <a href="/purchase-orders/{{ plan.purchase_order_id }}" class="btn" style="margin-left:.4rem;background:#E0F2FE;color:#075985;border:1px solid #BAE6FD;">🛒 Inkooporder</a>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -39,4 +77,57 @@
     <p style="color: var(--text-muted); padding: 1rem 0;">Geen zaagplannen gevonden.</p>
     {% endif %}
 </div>
+
+<script>
+function updateCount() {
+    const checked = document.querySelectorAll('.plan-chk:checked');
+    const count = checked.length;
+    document.getElementById('selected-count').textContent = count;
+    const btn = document.getElementById('btn-inkopen');
+    btn.disabled = count === 0;
+    btn.style.opacity = count === 0 ? '.45' : '1';
+    btn.style.cursor = count === 0 ? 'not-allowed' : 'pointer';
+    // update "select all" state
+    const allChk = document.querySelectorAll('.plan-chk');
+    document.getElementById('chk-all').indeterminate = count > 0 && count < allChk.length;
+    document.getElementById('chk-all').checked = count > 0 && count === allChk.length;
+}
+
+function toggleAll(masterChk) {
+    document.querySelectorAll('.plan-chk').forEach(c => { c.checked = masterChk.checked; });
+    updateCount();
+}
+
+async function submitPurchaseOrder() {
+    const checked = document.querySelectorAll('.plan-chk:checked');
+    if (checked.length === 0) return;
+
+    const ids = Array.from(checked).map(c => c.value);
+    const btn = document.getElementById('btn-inkopen');
+    const errDiv = document.getElementById('po-error');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Bezig…';
+    errDiv.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/purchase-orders', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({cutting_plan_order_ids: ids}),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            throw new Error(data.detail || `Fout ${resp.status}`);
+        }
+        window.location.href = '/purchase-orders/' + data.purchase_order_id;
+    } catch (err) {
+        errDiv.textContent = '❌ Inkopen mislukt: ' + err.message;
+        errDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '🛒 Inkopen (<span id="selected-count">' + ids.length + '</span>)';
+        btn.style.opacity = '1';
+    }
+}
+</script>
 {% endblock %}

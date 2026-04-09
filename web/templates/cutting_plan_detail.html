@@ -105,8 +105,12 @@
   .btn-print { background:var(--navy); color:white; border:none; padding:.55rem 1.4rem;
     border-radius:5px; cursor:pointer; font-size:.9rem; display:inline-block;
     font-family:'DM Sans',sans-serif; font-weight:600;
-    transition:background .15s; }
+    transition:background .15s; text-decoration:none; }
   .btn-print:hover { background:var(--navy-deep); }
+  .btn-delete-po { background:#DC2626; }
+  .btn-delete-po:hover { background:#991B1B; }
+  .btn-delete-po:disabled { background:#9CA3AF; cursor:not-allowed; }
+  .btn-po-link { background:var(--orange); }
   .progress-bar-wrap { background:var(--gray-light); border-radius:999px; height:10px; overflow:hidden; margin-top:.5rem; }
   .progress-bar-fill { height:100%; background:#059669; border-radius:999px; transition:width .3s; }
 
@@ -132,7 +136,13 @@
         <span><strong>Aangemaakt:</strong> {{ plan.created_at.strftime("%d-%m-%Y %H:%M:%S") if plan.created_at else '-' }}</span>
       </div>
     </div>
-    <button class="btn-print" onclick="window.print()">Afdrukken</button>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      {% if plan.purchase_order_id %}
+      <a href="/purchase-orders/{{ plan.purchase_order_id }}" class="btn-print btn-po-link">🛒 Inkooporder bekijken</a>
+      <button id="btn-delete-po" class="btn-print btn-delete-po" onclick="deleteInkooporder({{ plan.purchase_order_id }})">🗑 Inkooporderregel verwijderen</button>
+      {% endif %}
+      <button class="btn-print" onclick="window.print()">Afdrukken</button>
+    </div>
   </div>
 </div>
 
@@ -412,5 +422,38 @@
     document.getElementById("total-cuts").textContent = allCbs().length;
     restoreState();
   });
+
+  // ── Inkooporder verwijderen ────────────────────────────────
+  async function deleteInkooporder(poId) {
+    const confirmed = confirm(
+      "Weet je zeker dat je deze inkooporderregel wilt verwijderen uit MKG?\n\n" +
+      "Dit verwijdert de inkooporder (iorh + alle iorr-regels) uit het ERP " +
+      "en reset dit zaagplan naar de status \"Geoptimaliseerd\"."
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("btn-delete-po");
+    btn.disabled = true;
+    btn.textContent = "⏳ Verwijderen...";
+
+    try {
+      const resp = await fetch(`/api/purchase-orders/${poId}`, { method: "DELETE" });
+      if (resp.ok) {
+        btn.textContent = "✓ Verwijderd";
+        btn.style.background = "#059669";
+        setTimeout(() => location.reload(), 800);
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        const msg = data.detail || `HTTP ${resp.status}`;
+        alert("Verwijderen mislukt: " + msg);
+        btn.disabled = false;
+        btn.textContent = "🗑 Inkooporderregel verwijderen";
+      }
+    } catch (err) {
+      alert("Netwerkfout: " + err.message);
+      btn.disabled = false;
+      btn.textContent = "🗑 Inkooporderregel verwijderen";
+    }
+  }
 </script>
 {% endblock %}

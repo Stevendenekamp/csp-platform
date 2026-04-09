@@ -208,6 +208,11 @@
                         <label>Standaard staaflengte (mm)</label>
                         <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}" min="100" step="1">
                     </div>
+                    <div class="form-group">
+                        <label>Crediteur nummer (cred_num)</label>
+                        <input type="number" name="mkg_cred_num" value="{{ env.mkg_cred_num or '' }}" placeholder="bijv. 12345">
+                        <small>Crediteur nummer dat gebruikt wordt bij het aanmaken van inkooporders in MKG</small>
+                    </div>
                     <div class="checkbox-row">
                         <input type="checkbox" name="use_mkg" id="use_mkg" value="true" {% if env.use_mkg %}checked{% endif %}>
                         <label for="use_mkg">Echte MKG data gebruiken</label>

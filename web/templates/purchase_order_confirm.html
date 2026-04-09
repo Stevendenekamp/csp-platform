@@ -1,0 +1,216 @@
+{% extends "layout.html" %}
+
+{% block title %}Inkooporder {{ po.iorh_num }} — CSP{% endblock %}
+
+{% block content %}
+<style>
+  .po-header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
+  .po-header h2 { font-size:1.5rem; margin:0; font-family:'Raleway',sans-serif; color:var(--navy-deep); }
+  .po-meta { display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:.5rem; }
+  .po-meta span { font-size:.9rem; color:var(--text-muted); }
+  .po-meta strong { color:var(--navy-deep); }
+
+  .success-banner {
+    background: var(--success-bg);
+    border: 1px solid #86EFAC;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 1.5rem;
+    color: var(--success);
+    font-weight: 600;
+    font-size: .95rem;
+  }
+
+  .section-title {
+    font-family: 'Raleway', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--navy-deep);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin: 1.5rem 0 .75rem;
+    padding-bottom: .4rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .iorr-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--orange);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: .75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
+  .iorr-card .arti { font-weight: 700; font-family: 'Raleway', sans-serif; color: var(--navy-deep); }
+  .iorr-card .qty  { font-size: 1.2rem; font-weight: 700; color: var(--orange); }
+
+  .res-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin-top: .5rem; }
+  .res-table th { background: var(--cream); padding: .45rem .75rem; text-align: left; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid var(--border); font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+  .res-table td { padding: .45rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .res-table tr:last-child td { border-bottom: none; }
+
+  .badge-ok     { background:#D1FAE5; color:#065F46; padding:.2rem .6rem; border-radius:20px; font-size:.78rem; font-weight:600; }
+  .badge-skip   { background:#FEF3C7; color:#92400E; padding:.2rem .6rem; border-radius:20px; font-size:.78rem; font-weight:600; }
+  .badge-err    { background:var(--danger-bg); color:var(--danger); padding:.2rem .6rem; border-radius:20px; font-size:.78rem; font-weight:600; }
+
+  .zaagplan-list { list-style: none; padding: 0; }
+  .zaagplan-list li {
+    padding: .4rem .75rem;
+    border-radius: 5px;
+    margin-bottom: .35rem;
+    background: white;
+    border: 1px solid var(--border);
+    font-size: .9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .btn-danger {
+    background: #DC2626; color: white; border: none;
+    padding: .55rem 1.2rem; border-radius: 5px; cursor: pointer;
+    font-size: .9rem; font-family: 'DM Sans', sans-serif; font-weight: 600;
+    transition: background .15s; white-space: nowrap;
+  }
+  .btn-danger:hover { background: #991B1B; }
+  .btn-danger:disabled { background: #9CA3AF; cursor: not-allowed; }
+</style>
+
+<div class="card">
+  <div class="po-header">
+    <div>
+      <h2>✅ Inkooporder aangemaakt</h2>
+      <div class="po-meta" style="margin-top:.6rem;">
+        <span>MKG ordernummer: <strong>{{ po.iorh_num }}</strong></span>
+        <span>Crediteur: <strong>{{ po.cred_num or 99999 }}</strong></span>
+        {% if po.admi_num %}<span>Administratie: <strong>{{ po.admi_num }}</strong></span>{% endif %}
+        <span>Aangemaakt: <strong>{{ po.created_at.strftime("%d-%m-%Y %H:%M") if po.created_at else '—' }}</strong></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <button id="btn-delete-po" class="btn-danger" onclick="deleteInkooporder({{ po.id }})">🗑 Inkooporder verwijderen</button>
+      <a href="/cutting-plans" class="btn" style="white-space:nowrap;">← Terug naar zaagplannen</a>
+    </div>
+  </div>
+
+  <div class="success-banner" style="margin-top:1.25rem;">
+    <span style="font-size:1.4rem;">🛒</span>
+    <span>Inkooporder <strong>{{ po.iorh_num }}</strong> is succesvol aangemaakt in MKG met {{ po.lines|length }} inkooporderregel(s). De materiaalreserveringen zijn verwerkt.</span>
+  </div>
+
+  {# ── Zaagplannen ───────────────────────────────────────────── #}
+  <div class="section-title">Geselecteerde zaagplannen</div>
+  {% if related_orders %}
+  <ul class="zaagplan-list">
+    {% for order in related_orders %}
+    <li>
+      <span><strong>{{ order.order_id }}</strong> — {{ order.article_code }}</span>
+      <a href="/cutting-plans/{{ order.id }}" class="btn" style="padding:.25rem .7rem;font-size:.8rem;">Bekijk</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif po.cutting_plan_order_ids %}
+  <ul class="zaagplan-list">
+    {% for oid in po.cutting_plan_order_ids %}
+    <li><span>{{ oid }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color:var(--text-muted);">—</p>
+  {% endif %}
+
+  {# ── Inkooporderregels ─────────────────────────────────────── #}
+  <div class="section-title">Inkooporderregels (iorr)</div>
+  {% if po.lines %}
+    {% for line in po.lines %}
+    <div class="iorr-card">
+      <div>
+        <div class="arti">{{ line.arti_code }}</div>
+        <div style="font-size:.82rem; color:var(--text-muted); margin-top:.2rem;">
+          iorr_num: {{ line.iorr_num or '—' }}
+        </div>
+      </div>
+      <div class="qty">{{ line.quantity | int }} st.</div>
+    </div>
+
+    {# Reserveringen per iorr #}
+    {% if line.reservation_results %}
+    <table class="res-table" style="margin-bottom:1rem;">
+      <thead>
+        <tr>
+          <th>prmv_num</th>
+          <th>Aantal</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for res in line.reservation_results %}
+        <tr>
+          <td>{{ res.prmv_num if res.prmv_num is defined and res.prmv_num else '—' }}</td>
+          <td>
+            {% if res.qty_mm is defined and res.qty_mm is not none %}
+              {{ "{:,.0f}".format(res.qty_mm).replace(",",".") }} mm
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if res.skipped %}
+              <span class="badge-skip">⚠ Overgeslagen{% if res.reason %} — {{ res.reason }}{% endif %}</span>
+            {% elif res.result is none %}
+              <span class="badge-err">✗ Mislukt</span>
+            {% else %}
+              <span class="badge-ok">✓ Gereserveerd</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endfor %}
+  {% else %}
+  <p style="color:var(--text-muted);">Geen inkooporderregels gevonden.</p>
+  {% endif %}
+</div>
+
+<script>
+  async function deleteInkooporder(poId) {
+    const confirmed = confirm(
+      "Weet je zeker dat je deze inkooporder wilt verwijderen uit MKG?\n\n" +
+      "Dit verwijdert de inkooporder (iorh + alle iorr-regels) uit het ERP " +
+      "en reset de zaagplannen naar de status \"Geoptimaliseerd\"."
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("btn-delete-po");
+    btn.disabled = true;
+    btn.textContent = "⏳ Verwijderen...";
+
+    try {
+      const resp = await fetch(`/api/purchase-orders/${poId}`, { method: "DELETE" });
+      if (resp.ok) {
+        btn.textContent = "✓ Verwijderd";
+        btn.style.background = "#059669";
+        setTimeout(() => window.location.href = "/cutting-plans", 800);
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        const msg = data.detail || `HTTP ${resp.status}`;
+        alert("Verwijderen mislukt: " + msg);
+        btn.disabled = false;
+        btn.textContent = "🗑 Inkooporder verwijderen";
+      }
+    } catch (err) {
+      alert("Netwerkfout: " + err.message);
+      btn.disabled = false;
+      btn.textContent = "🗑 Inkooporder verwijderen";
+    }
+  }
+</script>
+{% endblock %}

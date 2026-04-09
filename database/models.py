@@ -42,6 +42,7 @@ class TenantEnvironment(Base):
 
     use_mkg = Column(Boolean, default=False, nullable=False)
     default_stock_length = Column(Float, default=6000.0, nullable=False)
+    mkg_cred_num = Column(Integer, nullable=True)        # crediteur nummer voor inkooporders
 
     # Unique token for this tenant's webhook URL: /api/webhook/mkg/{webhook_token}
     webhook_token = Column(String, unique=True, index=True,
@@ -58,7 +59,9 @@ class TenantEnvironment(Base):
 class OptimizationStatus(str, enum.Enum):
     PENDING = "pending"
     PROCESSING = "processing"
-    COMPLETED = "completed"
+    COMPLETED = "completed"              # legacy — blijft voor bestaande records
+    GEOPTIMALISEERD = "geoptimaliseerd"  # nieuw na optimalisatie
+    INKOOPORDER_AANGEMAAKT = "inkooporder_aangemaakt"  # na inkopen
     FAILED = "failed"
 
 class MaterialOrder(Base):
@@ -107,5 +110,40 @@ class CuttingPlan(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(String, nullable=True)
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=True)
     
     order = relationship("MaterialOrder", back_populates="cutting_plan")
+
+
+# ── Purchase order models ─────────────────────────────────────────────────────
+
+class PurchaseOrder(Base):
+    """Inkooporder aangemaakt vanuit geselecteerde zaagplannen."""
+    __tablename__ = "purchase_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    iorh_num = Column(String, nullable=False)          # bijv. "7026000002"
+    admi_num = Column(Integer, nullable=True)           # administratienummer uit MKG response
+    iorh_rowkey = Column(String, nullable=True)         # RowKey van de iorh in MKG
+    cred_num = Column(Integer, nullable=True)           # crediteur nummer (standaard 99999)
+    cutting_plan_order_ids = Column(JSON, nullable=True)  # lijst van MaterialOrder.order_id strings
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    lines = relationship("PurchaseOrderLine", back_populates="purchase_order")
+
+
+class PurchaseOrderLine(Base):
+    """Inkooporderregel gekoppeld aan een PurchaseOrder."""
+    __tablename__ = "purchase_order_lines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False, index=True)
+    iorr_num = Column(Integer, nullable=True)           # regelnummer in MKG iorr
+    iorr_rowkey = Column(String, nullable=True)         # RowKey van de iorr in MKG
+    arti_code = Column(String, nullable=False)
+    quantity = Column(Float, nullable=False)
+    reservation_results = Column(JSON, nullable=True)   # resultaat per prmv-reservering
+
+    purchase_order = relationship("PurchaseOrder", back_populates="lines")

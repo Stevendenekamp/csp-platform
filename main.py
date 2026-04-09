@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from database.database import init_db
 from api.routes import router as api_router, process_mkg_webhook
 from api.auth_routes import router as auth_api_router
+from api.onboarding_routes import router as onboarding_api_router
 from web.routes import router as web_router
 from web.auth_routes import router as web_auth_router
 from config import get_settings
@@ -36,9 +39,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Static files (screenshots etc.)
+static_dir = Path("static")
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # API routes
 app.include_router(auth_api_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
+app.include_router(onboarding_api_router)
 
 # Webhook — registered directly on app (not on a sub-router) to avoid
 # Starlette 0.27 method-routing bug where GET routes swallow other methods

@@ -12,6 +12,9 @@ def start_with_ngrok():
     # Start ngrok tunnel
     logger.info("Starting ngrok tunnel...")
     public_url = ngrok.connect(settings.port)
+    # Forceer https, ook als ngrok http teruggeeft
+    if not str(public_url).startswith("https://"):
+        public_url = str(public_url).replace("http://", "https://", 1)
     logger.info(f"✓ Ngrok tunnel established!")
     logger.info(f"✓ Public URL: {public_url}")
     logger.info(f"✓ Webhook URL: {public_url}/api/webhook/mkg")

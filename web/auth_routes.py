@@ -227,3 +227,11 @@ def regen_webhook(
     db.commit()
     logger.info(f"Webhook token regenerated for user {current_user.email}")
     return RedirectResponse("/settings?saved=1", status_code=302)
+
+
+# ── Onboarding wizard ──────────────────────────────────────────────────────────
+
+@router.get("/onboarding", response_class=HTMLResponse)
+def onboarding_redirect():
+    """Onboarding wizard is embedded as a tab within /settings."""
+    return RedirectResponse("/settings?tab=inrichting", status_code=302)

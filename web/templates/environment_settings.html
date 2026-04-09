@@ -4,8 +4,33 @@
 
 {% block extra_head %}
 <style>
-    .settings-wrap { max-width: 700px; margin: 0 auto; }
-    .settings-wrap .card h2 { margin-bottom: .25rem; }
+    /* ── Page wrapper ───────────────────────────────────────────── */
+    .settings-wrap { max-width: 820px; margin: 0 auto; }
+
+    /* ── Tab bar ───────────────────────────────────────────────── */
+    .tab-bar {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid var(--border);
+        margin-bottom: 1.75rem;
+    }
+    .tab-btn {
+        padding: .65rem 1.4rem;
+        font-size: .88rem; font-weight: 600;
+        cursor: pointer;
+        background: none; border: none;
+        color: var(--text-muted);
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+        font-family: 'DM Sans', sans-serif;
+        transition: color .15s, border-color .15s;
+    }
+    .tab-btn:hover { color: var(--navy); }
+    .tab-btn.active { color: var(--orange); border-bottom-color: var(--orange); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Settings tab ──────────────────────────────────────────── */
     .settings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .settings-row .full { grid-column: 1 / -1; }
     .checkbox-row { display: flex; align-items: center; gap: .65rem; padding-top: 1.4rem; }
@@ -14,33 +39,119 @@
     .settings-actions { margin-top: 1.75rem; }
     .account-table { width: auto; }
     .account-table th {
-        background: none;
-        color: var(--text-muted);
-        font-size: .78rem;
-        letter-spacing: .06em;
-        padding: .4rem 1.5rem .4rem 0;
-        text-align: left;
-        border-radius: 0;
-        font-weight: 600;
-        text-transform: uppercase;
-        border-bottom: 1px solid var(--gray-light);
+        background: none; color: var(--text-muted); font-size: .78rem; letter-spacing: .06em;
+        padding: .4rem 1.5rem .4rem 0; text-align: left; border-radius: 0; font-weight: 600;
+        text-transform: uppercase; border-bottom: 1px solid var(--gray-light);
     }
-    .account-table td {
-        padding: .4rem 0;
-        font-size: .9rem;
-        border-bottom: 1px solid var(--gray-light);
-        color: var(--text);
+    .account-table td { padding: .4rem 0; font-size: .9rem; border-bottom: 1px solid var(--gray-light); color: var(--text); }
+    .account-table tr:last-child th, .account-table tr:last-child td { border-bottom: none; }
+    .webhook-warning { font-size: .82rem; color: var(--copper); margin-top: .75rem; display: flex; gap: .4rem; align-items: flex-start; }
+
+    /* ── Onboarding: hero ────────────────────────────────────────── */
+    .ob-hero {
+        background: linear-gradient(135deg, var(--navy-deep) 0%, var(--navy) 100%);
+        border-radius: 8px; padding: 1.5rem 2rem; margin-bottom: 1.75rem; color: white;
     }
-    .account-table tr:last-child th,
-    .account-table tr:last-child td { border-bottom: none; }
-    .webhook-warning {
-        font-size: .82rem;
-        color: var(--copper);
-        margin-top: .75rem;
-        display: flex;
-        gap: .4rem;
-        align-items: flex-start;
+    .ob-hero h2 { font-family: 'Raleway', sans-serif; font-size: 1.35rem; font-weight: 700; color: var(--orange); margin-bottom: .25rem; }
+    .ob-hero p { color: rgba(255,255,255,.75); font-size: .9rem; margin: 0; }
+
+    /* ── Stepper ────────────────────────────────────────────────── */
+    .stepper { display: flex; align-items: flex-start; gap: 0; margin-bottom: 2rem; }
+    .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; text-align: center; }
+    .step-item:not(:last-child)::after {
+        content: ''; position: absolute; top: 18px; left: 50%; width: 100%; height: 2px;
+        background: var(--border); z-index: 0; transition: background .3s;
     }
+    .step-item.done:not(:last-child)::after { background: #059669; }
+    .step-bubble {
+        width: 36px; height: 36px; border-radius: 50%; background: var(--border); color: white;
+        font-weight: 700; font-size: 1rem; display: flex; align-items: center; justify-content: center;
+        position: relative; z-index: 1; transition: background .3s; flex-shrink: 0;
+    }
+    .step-item.active .step-bubble { background: var(--orange); }
+    .step-item.done   .step-bubble { background: #059669; }
+    .step-label { font-size: .78rem; font-weight: 600; color: var(--text-muted); margin-top: .4rem; max-width: 100px; line-height: 1.3; }
+    .step-item.active .step-label { color: var(--orange); }
+    .step-item.done   .step-label { color: #059669; }
+
+    /* ── Step cards ─────────────────────────────────────────────── */
+    .step-card { border: 1px solid var(--border); border-radius: 8px; background: white; margin-bottom: 1.25rem; overflow: hidden; transition: box-shadow .2s; }
+    .step-card.is-done { border-color: #86EFAC; }
+    .step-card:not(.is-collapsed) { box-shadow: 0 2px 12px rgba(22,32,42,.1); }
+    .step-header { display: flex; align-items: center; gap: 1rem; padding: 1.1rem 1.5rem; cursor: pointer; user-select: none; background: white; border-radius: 8px 8px 0 0; transition: background .15s; }
+    .step-header:hover { background: #FAFAF6; }
+    .step-card.is-collapsed .step-header { border-radius: 8px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--navy); color: white; font-weight: 700; font-size: .9rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .2s; }
+    .step-card.is-done .step-num { background: #059669; }
+    .step-header-text { flex: 1; }
+    .step-header-text h3 { font-family: 'Raleway', sans-serif; font-size: 1.05rem; font-weight: 700; color: var(--navy-deep); margin: 0 0 .1rem; }
+    .step-header-text p { color: var(--text-muted); font-size: .82rem; margin: 0; }
+    .step-badge { font-size: .75rem; font-weight: 600; padding: .2rem .65rem; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+    .badge-todo { background: var(--gray-light); color: var(--text-muted); }
+    .badge-done { background: #D1FAE5; color: #065F46; }
+    .step-chevron { color: var(--text-muted); font-size: 1.1rem; transition: transform .25s; flex-shrink: 0; }
+    .step-card.is-collapsed .step-chevron { transform: rotate(-90deg); }
+    .step-body { padding: 0 1.5rem 1.5rem; border-top: 1px solid var(--gray-light); }
+    .step-card.is-collapsed .step-body { display: none; }
+
+    /* ── Connection form ────────────────────────────────────────── */
+    .conn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.25rem; }
+    .conn-grid .full { grid-column: 1 / -1; }
+
+    /* ── Result banners ─────────────────────────────────────────── */
+    .test-result {
+        margin-top: 1rem; padding: .85rem 1rem; border-radius: 6px;
+        font-size: .875rem; font-weight: 500;
+        display: none; align-items: flex-start; gap: .5rem; white-space: pre-line;
+    }
+    .test-result.show { display: flex; }
+    .test-result.ok   { background: #D1FAE5; color: #065F46; border-left: 4px solid #16A34A; }
+    .test-result.err  { background: #FEE2E2; color: #991B1B; border-left: 4px solid #DC2626; }
+    .test-result.warn { background: #FEF3C7; color: #92400E; border-left: 4px solid #D97706; }
+    .spinner {
+        width: 16px; height: 16px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: white;
+        border-radius: 50%; animation: spin .6s linear infinite;
+        display: inline-block; vertical-align: middle; margin-right: .4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Instruction list ───────────────────────────────────────── */
+    .instruction-list { list-style: none; padding: 0; margin: 1.25rem 0 0; }
+    .instruction-list li { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: flex-start; }
+    .inst-num {
+        width: 28px; height: 28px; border-radius: 50%; background: var(--orange);
+        color: white; font-size: .8rem; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
+    }
+    .inst-content { flex: 1; }
+    .inst-content strong { display: block; font-size: .9rem; color: var(--navy-deep); margin-bottom: .3rem; }
+    .inst-content p { font-size: .85rem; color: var(--text-muted); margin: 0 0 .6rem; line-height: 1.5; }
+    .inst-content code { background: var(--cream); border: 1px solid var(--border); border-radius: 4px; padding: .1rem .4rem; font-family: 'Courier New', monospace; font-size: .82rem; color: var(--navy-deep); }
+
+    /* ── Screenshots ─────────────────────────────────────────────── */
+    .screenshot-wrap { margin-top: .6rem; border: 1.5px dashed var(--border); border-radius: 6px; overflow: hidden; background: var(--cream); }
+    .screenshot-wrap img { display: block; width: 100%; height: auto; border-radius: 4px; }
+    .screenshot-placeholder { padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: .82rem; }
+    .screenshot-placeholder svg { margin-bottom: .5rem; }
+
+    /* ── Verify section ──────────────────────────────────────────── */
+    .verify-section { margin-top: 1.5rem; padding: 1rem; background: var(--cream); border-radius: 6px; border: 1px solid var(--border); }
+    .verify-section h4 { font-size: .9rem; font-weight: 600; color: var(--navy); margin-bottom: .35rem; }
+    .verify-section p { font-size: .82rem; color: var(--text-muted); margin-bottom: .75rem; }
+
+    /* ── Webhook URL box ────────────────────────────────────────── */
+    .webhook-box {
+        background: var(--navy-deep); color: #a3e8c2;
+        font-family: 'Courier New', monospace; font-size: .82rem;
+        padding: .85rem 1rem; border-radius: 6px; word-break: break-all;
+        margin-bottom: .75rem; cursor: pointer; transition: background .15s;
+    }
+    .webhook-box:hover { background: #1d2c3a; }
+    .webhook-copy-hint { font-size: .72rem; color: var(--gray); margin-top: .3rem; }
+
+    /* ── Step footer ─────────────────────────────────────────────── */
+    .step-footer { display: flex; justify-content: flex-end; gap: .75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--gray-light); }
 </style>
 {% endblock %}
 
@@ -50,114 +161,485 @@
     {% if saved %}
     <div class="alert alert-success">Instellingen opgeslagen.</div>
     {% endif %}
-
     {% if error %}
     <div class="alert alert-danger">{{ error }}</div>
     {% endif %}
 
-    <!-- MKG koppeling -->
-    <div class="card">
-        <h2>MKG Omgevingsinstellingen</h2>
-        <p class="card-sub">Koppel uw MKG ERP-omgeving. Credentials worden versleuteld opgeslagen.</p>
-
-        <form method="post" action="/settings">
-            <div class="settings-row">
-
-                <div class="form-group full">
-                    <label>MKG Base URL</label>
-                    <input type="url" name="mkg_base_url" value="{{ env.mkg_base_url or '' }}" placeholder="https://uw-mkg-server.nl">
-                    <small>Basis-URL van uw MKG installatie (zonder pad)</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Context pad</label>
-                    <input type="text" name="mkg_context_path" value="{{ env.mkg_context_path or '/mkg' }}" placeholder="/mkg">
-                </div>
-
-                <div class="form-group">
-                    <label>API Key (X-CustomerID)</label>
-                    <input type="text" name="mkg_api_key" value="{{ env.mkg_api_key or '' }}" placeholder="uw-api-key">
-                </div>
-
-                <div class="form-group">
-                    <label>MKG Gebruikersnaam</label>
-                    <input type="text" name="mkg_username" value="{{ env.mkg_username or '' }}" placeholder="mkg_gebruiker">
-                </div>
-
-                <div class="form-group full">
-                    <label>MKG Wachtwoord</label>
-                    <input type="password" name="mkg_password"
-                        placeholder="{% if env.mkg_password_enc %}Opgeslagen — leeg laten om te behouden{% else %}Voer wachtwoord in{% endif %}">
-                    <small>Laat leeg om het huidige wachtwoord te behouden</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Standaard staaflengte (mm)</label>
-                    <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}" min="100" step="1">
-                </div>
-
-                <div class="checkbox-row">
-                    <input type="checkbox" name="use_mkg" id="use_mkg" value="true" {% if env.use_mkg %}checked{% endif %}>
-                    <label for="use_mkg">Echte MKG data gebruiken</label>
-                </div>
-
-            </div>
-
-            <div class="settings-actions">
-                <button type="submit" class="btn" style="padding: .65rem 2rem;">Opslaan</button>
-            </div>
-        </form>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <button class="tab-btn" id="tabBtnInstellingen" onclick="switchTab('instellingen')">Instellingen</button>
+        <button class="tab-btn" id="tabBtnInrichting"   onclick="switchTab('inrichting')">Inrichting</button>
     </div>
 
-    <!-- Webhook URL -->
-    <div class="card">
-        <h3>Webhook URL</h3>
-        <p class="card-sub">Configureer deze URL als webhook-doel in MKG. De URL is uniek voor uw omgeving.</p>
+    <!-- ═══════════════════════════════════════════════
+         TAB 1 – Instellingen
+    ═══════════════════════════════════════════════ -->
+    <div class="tab-panel" id="panelInstellingen">
 
-        <div class="mono">{{ webhook_url }}</div>
-
-        <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
-            <button onclick="copyWebhook()" class="btn btn-success">Kopieer URL</button>
-            <form method="post" action="/settings/regen-webhook" style="display: inline;">
-                <button type="submit" class="btn btn-copper"
-                    onclick="return confirm('Weet u zeker dat u een nieuwe webhook-token wilt genereren? De oude URL werkt dan niet meer.')">
-                    Nieuwe token genereren
-                </button>
+        <div class="card">
+            <h2>MKG Omgevingsinstellingen</h2>
+            <p class="card-sub">Koppel uw MKG ERP-omgeving. Credentials worden versleuteld opgeslagen.</p>
+            <form method="post" action="/settings">
+                <div class="settings-row">
+                    <div class="form-group full">
+                        <label>MKG Base URL</label>
+                        <input type="url" name="mkg_base_url" value="{{ env.mkg_base_url or '' }}" placeholder="https://uw-mkg-server.nl">
+                        <small>Basis-URL van uw MKG installatie (zonder pad)</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Context pad</label>
+                        <input type="text" name="mkg_context_path" value="{{ env.mkg_context_path or '/mkg' }}" placeholder="/mkg">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key (X-CustomerID)</label>
+                        <input type="text" name="mkg_api_key" value="{{ env.mkg_api_key or '' }}" placeholder="uw-api-key">
+                    </div>
+                    <div class="form-group">
+                        <label>MKG Gebruikersnaam</label>
+                        <input type="text" name="mkg_username" value="{{ env.mkg_username or '' }}" placeholder="mkg_gebruiker">
+                    </div>
+                    <div class="form-group full">
+                        <label>MKG Wachtwoord</label>
+                        <input type="password" name="mkg_password"
+                            placeholder="{% if env.mkg_password_enc %}Opgeslagen — leeg laten om te behouden{% else %}Voer wachtwoord in{% endif %}">
+                        <small>Laat leeg om het huidige wachtwoord te behouden</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Standaard staaflengte (mm)</label>
+                        <input type="number" name="default_stock_length" value="{{ env.default_stock_length or 6000 }}" min="100" step="1">
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" name="use_mkg" id="use_mkg" value="true" {% if env.use_mkg %}checked{% endif %}>
+                        <label for="use_mkg">Echte MKG data gebruiken</label>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn" style="padding: .65rem 2rem;">Opslaan</button>
+                </div>
             </form>
         </div>
 
-        <p class="webhook-warning">
-            <span>&#9888;</span>
-            <span>Bewaar de token geheim. Iedereen met deze URL kan orders aanmaken in uw omgeving.</span>
-        </p>
-    </div>
+        <div class="card">
+            <h3>Webhook URL</h3>
+            <p class="card-sub">Configureer deze URL als webhook-doel in MKG. De URL is uniek voor uw omgeving.</p>
+            <div class="mono">{{ webhook_url }}</div>
+            <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+                <button onclick="copyWebhook()" class="btn btn-success">Kopieer URL</button>
+                <form method="post" action="/settings/regen-webhook" style="display: inline;">
+                    <button type="submit" class="btn btn-copper"
+                        onclick="return confirm('Weet u zeker dat u een nieuwe webhook-token wilt genereren? De oude URL werkt dan niet meer.')">
+                        Nieuwe token genereren
+                    </button>
+                </form>
+            </div>
+            <p class="webhook-warning">
+                <span>&#9888;</span>
+                <span>Bewaar de token geheim. Iedereen met deze URL kan orders aanmaken in uw omgeving.</span>
+            </p>
+        </div>
 
-    <!-- Account -->
-    <div class="card">
-        <h3>Account</h3>
-        <table class="account-table" style="margin-top: .75rem;">
-            <tr>
-                <th>Naam</th>
-                <td>{{ current_user.username }}</td>
-            </tr>
-            <tr>
-                <th>E-mail</th>
-                <td>{{ current_user.email }}</td>
-            </tr>
-            <tr>
-                <th>Lid sinds</th>
-                <td>{{ current_user.created_at.strftime('%d-%m-%Y') }}</td>
-            </tr>
-        </table>
-    </div>
+        <div class="card">
+            <h3>Account</h3>
+            <table class="account-table" style="margin-top: .75rem;">
+                <tr><th>Naam</th><td>{{ current_user.username }}</td></tr>
+                <tr><th>E-mail</th><td>{{ current_user.email }}</td></tr>
+                <tr><th>Lid sinds</th><td>{{ current_user.created_at.strftime('%d-%m-%Y') }}</td></tr>
+            </table>
+        </div>
 
-</div>
+    </div><!-- /panelInstellingen -->
+
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 2 – Inrichting (onboarding wizard)
+    ═══════════════════════════════════════════════ -->
+    <div class="tab-panel" id="panelInrichting">
+
+        <div class="ob-hero">
+            <h2>Inrichten voor nieuwe klant</h2>
+            <p>Volg de onderstaande stappen om de MKG-koppeling volledig in te richten. Elk onderdeel bevat instructies met screenshots — ook zonder technische kennis goed te volgen.</p>
+        </div>
+
+        <!-- Stepper -->
+        <div class="stepper">
+            <div class="step-item" id="stepper-1"><div class="step-bubble">1</div><div class="step-label">MKG Koppeling</div></div>
+            <div class="step-item" id="stepper-2"><div class="step-bubble">2</div><div class="step-label">LDM Verzameling</div></div>
+            <div class="step-item" id="stepper-3"><div class="step-bubble">3</div><div class="step-label">Webhook</div></div>
+        </div>
+
+        <!-- Stap 1 -->
+        <div class="step-card" id="stepCard1">
+            <div class="step-header" onclick="toggleStep(1)">
+                <div class="step-num">1</div>
+                <div class="step-header-text">
+                    <h3>MKG Koppeling instellen</h3>
+                    <p>Vul uw MKG server-URL, API-sleutel en inloggegevens in en test de verbinding.</p>
+                </div>
+                <span class="step-badge badge-todo" id="badge1">Nog te doen</span>
+                <span class="step-chevron">&#8964;</span>
+            </div>
+            <div class="step-body">
+                <div class="conn-grid">
+                    <div class="form-group full">
+                        <label>MKG Basis-URL <span style="color:var(--copper)">*</span></label>
+                        <input type="url" id="ob_base_url" value="{{ env.mkg_base_url or '' }}" placeholder="https://uw-mkg-server.nl">
+                        <small>Zonder pad, bijv. <code>/mkg</code></small>
+                    </div>
+                    <div class="form-group">
+                        <label>Context pad</label>
+                        <input type="text" id="ob_context_path" value="{{ env.mkg_context_path or '/mkg' }}" placeholder="/mkg">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key (X-CustomerID)</label>
+                        <input type="text" id="ob_api_key" value="{{ env.mkg_api_key or '' }}" placeholder="uw-api-key">
+                    </div>
+                    <div class="form-group">
+                        <label>Gebruikersnaam <span style="color:var(--copper)">*</span></label>
+                        <input type="text" id="ob_username" value="{{ env.mkg_username or '' }}" placeholder="mkg_gebruiker">
+                    </div>
+                    <div class="form-group">
+                        <label>Wachtwoord <span style="color:var(--copper)">*</span></label>
+                        <input type="password" id="ob_password"
+                            placeholder="{% if env.mkg_password_enc %}Opgeslagen — leeg laten om te behouden{% else %}Voer wachtwoord in{% endif %}">
+                        <small>Wordt versleuteld opgeslagen</small>
+                    </div>
+                </div>
+                <div class="test-result" id="testResult1"></div>
+                <div class="step-footer">
+                    <button class="btn" id="btnTest1" onclick="testConnection()">Verbinding testen &amp; opslaan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stap 2 -->
+        <div class="step-card is-collapsed" id="stepCard2">
+            <div class="step-header" onclick="toggleStep(2)">
+                <div class="step-num">2</div>
+                <div class="step-header-text">
+                    <h3>LDM Verzameling aanmaken</h3>
+                    <p>Maak een LDM-verzameling aan in MKG zodat orderregels correct verwerkt worden.</p>
+                </div>
+                <span class="step-badge badge-todo" id="badge2">Nog te doen</span>
+                <span class="step-chevron">&#8964;</span>
+            </div>
+            <div class="step-body">
+                <p style="margin-top:1rem; font-size:.88rem; color:var(--text-muted);">Volg onderstaande stappen in uw MKG ERP-omgeving.</p>
+                <ol class="instruction-list">
+                    <li>
+                        <div class="inst-num">1</div>
+                        <div class="inst-content">
+                            <strong>Open het menu Voorraadbeheer</strong>
+                            <p>Klik op <code>Voorraadbeheer</code> en kies <code>Verzamelingen</code>.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/ldm-01-menu.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><div><em>ldm-01-menu.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">2</div>
+                        <div class="inst-content">
+                            <strong>Maak een nieuwe verzameling aan</strong>
+                            <p>Klik op <code>Nieuw</code> om een lege verzameling te openen.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/ldm-02-nieuw.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><div><em>ldm-02-nieuw.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">3</div>
+                        <div class="inst-content">
+                            <strong>Vul de veldnaam en het type in</strong>
+                            <p>Geef de naam <code>LDM</code> en stel het type in op <strong>LDM</strong>.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/ldm-03-velden.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><div><em>ldm-03-velden.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">4</div>
+                        <div class="inst-content">
+                            <strong>Sla de verzameling op</strong>
+                            <p>Klik op <code>Opslaan</code> en controleer of de verzameling zichtbaar is in de lijst.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/ldm-04-opslaan.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><div><em>ldm-04-opslaan.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                </ol>
+                <div class="verify-section">
+                    <h4>&#10003; Optioneel: controleer via API</h4>
+                    <p>
+                        Controleert of de LDM-verzameling correct is aangemaakt in MKG.
+                        De velden <code>udof_bron</code>, <code>udof_bron_query</code> en <code>udof_type</code> worden vergeleken met de verwachte waarden.
+                        Bij een <strong>403</strong> ontbreken de leesrechten en wordt dit gemeld zonder foutmelding.
+                    </p>
+                    <div style="display:flex; gap:.75rem; align-items:flex-start; flex-wrap:wrap;">
+                        <button class="btn btn-navy" onclick="verifyLdm()" id="btnVerifyLdm">Controleer LDM record</button>
+                        <div class="test-result" id="ldmResult" style="margin:0; flex:1; align-self:center;"></div>
+                    </div>
+                </div>
+                <div class="step-footer">
+                    <button class="btn btn-outline" onclick="markDone(2)">&#10003;&nbsp; Stap voltooien</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stap 3 -->
+        <div class="step-card is-collapsed" id="stepCard3">
+            <div class="step-header" onclick="toggleStep(3)">
+                <div class="step-num">3</div>
+                <div class="step-header-text">
+                    <h3>Webhook aanmaken in MKG</h3>
+                    <p>CSP ontvangt hiermee automatisch nieuwe orders vanuit MKG.</p>
+                </div>
+                <span class="step-badge badge-todo" id="badge3">Nog te doen</span>
+                <span class="step-chevron">&#8964;</span>
+            </div>
+            <div class="step-body">
+                <div style="margin-top:1rem;">
+                    <p style="font-size:.88rem; font-weight:600; color:var(--navy); margin-bottom:.4rem;">Uw unieke CSP Webhook-URL (kopieer voor gebruik in MKG):</p>
+                    <div class="webhook-box" id="webhookUrlOb" onclick="copyWebhookUrl()" title="Klik om te kopiëren">{{ webhook_url }}</div>
+                    <p class="webhook-copy-hint">&#128203; Klik op de URL om te kopiëren naar het klembord</p>
+                </div>
+                <ol class="instruction-list" style="margin-top:1.25rem;">
+                    <li>
+                        <div class="inst-num">1</div>
+                        <div class="inst-content">
+                            <strong>Open het menu Beheer → Webhooks</strong>
+                            <p>Klik op <code>Beheer</code> en kies <code>Webhooks</code>.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/webhook-01-menu.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div><em>webhook-01-menu.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">2</div>
+                        <div class="inst-content">
+                            <strong>Maak een nieuwe webhook aan</strong>
+                            <p>Klik op <code>Nieuw</code> om een lege webhook-definitie te openen.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/webhook-02-nieuw.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div><em>webhook-02-nieuw.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">3</div>
+                        <div class="inst-content">
+                            <strong>Vul de webhook-URL in</strong>
+                            <p>Plak de CSP Webhook-URL hierboven in het URL-veld. Gebruik <strong>POST</strong> als methode.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/webhook-03-url.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div><em>webhook-03-url.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">4</div>
+                        <div class="inst-content">
+                            <strong>Selecteer de juiste events</strong>
+                            <p>Activeer <code>Order aangemaakt</code> en <code>Order gewijzigd</code>. Vink ook <code>Actief</code> aan.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/webhook-04-events.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div><em>webhook-04-events.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="inst-num">5</div>
+                        <div class="inst-content">
+                            <strong>Sla de webhook op</strong>
+                            <p>Klik op <code>Opslaan</code>. MKG stuurt nu automatisch berichten bij elke order-mutatie.</p>
+                            <div class="screenshot-wrap">
+                                <img src="/static/screenshots/webhook-05-opslaan.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                <div class="screenshot-placeholder" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div><em>webhook-05-opslaan.png</em> — plaats in <code>/static/screenshots/</code></div></div>
+                            </div>
+                        </div>
+                    </li>
+                </ol>
+                <div class="verify-section">
+                    <h4>&#10003; Optioneel: controleer webhook via API</h4>
+                    <p>Klik om te controleren of de webhook correct is aangemaakt in MKG. <em>(API-aanroep wordt geconfigureerd zodra de details beschikbaar zijn.)</em></p>
+                    <div style="display:flex; gap:.75rem; align-items:flex-start; flex-wrap:wrap;">
+                        <button class="btn btn-navy" onclick="verifyWebhook()" id="btnVerifyWebhook">Controleer webhook</button>
+                        <div class="test-result" id="webhookResult" style="margin:0; flex:1; align-self:center;"></div>
+                    </div>
+                </div>
+                <div class="step-footer">
+                    <button class="btn btn-outline" onclick="markDone(3)">&#10003;&nbsp; Stap voltooien</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="allDoneBanner" class="alert alert-success" style="display:none; margin-top:1.5rem;">
+            <strong>&#127881; Alle stappen voltooid!</strong>
+            U kunt nu vanuit MKG orders doorsturen naar CSP.
+            <a href="/" style="color:inherit; font-weight:700; margin-left:.5rem;">Ga naar het dashboard &rarr;</a>
+        </div>
+
+    </div><!-- /panelInrichting -->
+
+</div><!-- /settings-wrap -->
 
 <script>
-function copyWebhook() {
-    navigator.clipboard.writeText("{{ webhook_url }}").then(() => {
-        alert("Webhook URL gekopieerd!");
+/* ═══════════════════════════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════════════════════════ */
+function switchTab(name) {
+    ['instellingen','inrichting'].forEach(t => {
+        document.getElementById('panel'  + cap(t)).classList.toggle('active', t === name);
+        document.getElementById('tabBtn' + cap(t)).classList.toggle('active', t === name);
     });
+    const url = new URL(window.location);
+    url.searchParams.set('tab', name);
+    history.replaceState({}, '', url);
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const urlTab = new URLSearchParams(window.location.search).get('tab') || 'instellingen';
+    switchTab(urlTab);
+    initOnboarding();
+});
+
+{% if saved %}switchTab('instellingen');{% endif %}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════════════════════════════ */
+function copyWebhook() {
+    navigator.clipboard.writeText("{{ webhook_url }}").then(() => alert("Webhook URL gekopieerd!"));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ONBOARDING WIZARD
+═══════════════════════════════════════════════════════════════ */
+let doneSteps = new Set();
+
+function initOnboarding() {
+    const saved = JSON.parse(localStorage.getItem('csp_ob_done') || '[]');
+    saved.forEach(n => { if (n === 2 || n === 3) setStepDone(n); });
+    const hasCreds = {{ 'true' if env.mkg_base_url else 'false' }};
+    if (hasCreds) {
+        setStepDone(1);
+        if (!doneSteps.has(2)) openStep(2);
+    } else {
+        openStep(1);
+    }
+    refreshStepper();
+    checkAllDone();
+}
+
+function openStep(n)   { document.getElementById(`stepCard${n}`).classList.remove('is-collapsed'); }
+function closeStep(n)  { document.getElementById(`stepCard${n}`).classList.add('is-collapsed'); }
+function toggleStep(n) { document.getElementById(`stepCard${n}`).classList.toggle('is-collapsed'); }
+
+function setStepDone(n) {
+    doneSteps.add(n);
+    const card  = document.getElementById(`stepCard${n}`);
+    const badge = document.getElementById(`badge${n}`);
+    if (!card || !badge) return;
+    card.classList.add('is-done');
+    badge.className   = 'step-badge badge-done';
+    badge.textContent = '\u2713 Voltooid';
+    card.classList.add('is-collapsed');
+    refreshStepper();
+    checkAllDone();
+    if (n === 2 || n === 3) {
+        const arr = Array.from(doneSteps).filter(x => x === 2 || x === 3);
+        localStorage.setItem('csp_ob_done', JSON.stringify(arr));
+    }
+}
+
+function markDone(n) {
+    setStepDone(n);
+    if (n === 2 && !doneSteps.has(3)) openStep(3);
+}
+
+function refreshStepper() {
+    [1, 2, 3].forEach(n => {
+        const el = document.getElementById(`stepper-${n}`);
+        if (!el) return;
+        el.className = doneSteps.has(n) ? 'step-item done' : 'step-item';
+        el.querySelector('.step-bubble').textContent = doneSteps.has(n) ? '\u2713' : n;
+    });
+}
+
+function checkAllDone() {
+    const b = document.getElementById('allDoneBanner');
+    if (b) b.style.display = ([1,2,3].every(n => doneSteps.has(n))) ? 'block' : 'none';
+}
+
+async function testConnection() {
+    const btn    = document.getElementById('btnTest1');
+    const result = document.getElementById('testResult1');
+    const base   = document.getElementById('ob_base_url').value.trim();
+    const ctx    = document.getElementById('ob_context_path').value.trim() || '/mkg';
+    const key    = document.getElementById('ob_api_key').value.trim();
+    const user   = document.getElementById('ob_username').value.trim();
+    const pass   = document.getElementById('ob_password').value;
+    if (!base || !user) { showResult(result, 'err', 'Vul minimaal de basis-URL en gebruikersnaam in.'); return; }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Verbinding testen…';
+    try {
+        const resp = await fetch('/api/onboarding/test-connection', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mkg_base_url: base, mkg_context_path: ctx, mkg_api_key: key, mkg_username: user, mkg_password: pass, save_on_success: true }),
+        });
+        const data = await resp.json();
+        if (data.success) { showResult(result, 'ok', data.message); setTimeout(() => { setStepDone(1); openStep(2); }, 900); }
+        else showResult(result, 'err', data.message);
+    } catch (e) { showResult(result, 'err', 'Netwerkfout: ' + e.message); }
+    finally { btn.disabled = false; btn.innerHTML = 'Verbinding testen &amp; opslaan'; }
+}
+
+async function verifyLdm() {
+    const btn = document.getElementById('btnVerifyLdm');
+    const res = document.getElementById('ldmResult');
+    btn.disabled = true; const orig = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> Controleren…';
+    try {
+        const data = await (await fetch('/api/onboarding/verify-ldm', {method:'POST'})).json();
+        if (data.success === true)       showResult(res, 'ok',   data.message);
+        else if (data.success === null)  showResult(res, 'warn', data.message);
+        else                             showResult(res, 'err',  data.message);
+    } catch (e) { showResult(res, 'err', 'Netwerkfout: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function verifyWebhook() {
+    const btn = document.getElementById('btnVerifyWebhook');
+    const res = document.getElementById('webhookResult');
+    btn.disabled = true; const orig = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> Controleren…';
+    try {
+        const data = await (await fetch('/api/onboarding/verify-webhook', {method:'POST'})).json();
+        if (data.success === true)       showResult(res, 'ok',   data.message);
+        else if (data.success === null)  showResult(res, 'warn', data.message);
+        else                             showResult(res, 'err',  data.message);
+    } catch (e) { showResult(res, 'err', 'Netwerkfout: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+function copyWebhookUrl() {
+    const url = document.getElementById('webhookUrlOb').textContent.trim();
+    navigator.clipboard.writeText(url).then(() => {
+        const el = document.querySelector('.webhook-copy-hint');
+        const orig = el.textContent;
+        el.textContent = '\u2713 Gekopieerd naar klembord!'; el.style.color = '#059669';
+        setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 2000);
+    });
+}
+
+function showResult(el, type, msg) {
+    el.className = 'test-result show ' + type;
+    const icon = type === 'ok' ? '\u2713' : type === 'warn' ? '\u26A0' : '\u2717';
+    el.textContent = icon + ' ' + msg;
 }
 </script>
 {% endblock %}

@@ -306,7 +306,7 @@
                 </div>
                 <div class="test-result" id="testResult1"></div>
                 <div class="step-footer">
-                    <button class="btn" id="btnTest1" onclick="testConnection()">Verbinding testen &amp; opslaan</button>
+                    <button class="btn" id="btnTest1" onclick="testConnection()">Opslaan &amp; testen</button>
                 </div>
             </div>
         </div>
@@ -501,10 +501,10 @@ function switchTab(name) {
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const urlTab = new URLSearchParams(window.location.search).get('tab') || 'instellingen';
     switchTab(urlTab);
-    initOnboarding();
+    await initOnboarding();
 });
 
 {% if saved %}switchTab('instellingen');{% endif %}
@@ -521,16 +521,124 @@ function copyWebhook() {
 ═══════════════════════════════════════════════════════════════ */
 let doneSteps = new Set();
 
-function initOnboarding() {
+// Snapshot of field values at page load — used to detect changes
+let _origFields = {};
+
+function _captureOriginals() {
+    _origFields = {
+        base_url:     document.getElementById('ob_base_url').value.trim(),
+        context_path: document.getElementById('ob_context_path').value.trim(),
+        api_key:      document.getElementById('ob_api_key').value.trim(),
+        username:     document.getElementById('ob_username').value.trim(),
+    };
+}
+
+function _hasChanges() {
+    const cur = {
+        base_url:     document.getElementById('ob_base_url').value.trim(),
+        context_path: document.getElementById('ob_context_path').value.trim(),
+        api_key:      document.getElementById('ob_api_key').value.trim(),
+        username:     document.getElementById('ob_username').value.trim(),
+    };
+    const fieldChanged = Object.keys(_origFields).some(k => _origFields[k] !== cur[k]);
+    const passwordFilled = document.getElementById('ob_password').value.length > 0;
+    return fieldChanged || passwordFilled;
+}
+
+function _updateBtnLabel() {
+    const btn = document.getElementById('btnTest1');
+    if (!btn) return;
     const hasCreds = {{ 'true' if env.mkg_base_url else 'false' }};
+    if (hasCreds && !_hasChanges()) {
+        btn.textContent = 'Verbinding testen';
+    } else {
+        btn.innerHTML = 'Opslaan &amp; testen';
+    }
+}
+
+async function initOnboarding() {
+    _captureOriginals();
+
+    // Attach change listeners so button label stays up-to-date
+    ['ob_base_url','ob_context_path','ob_api_key','ob_username','ob_password'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', _updateBtnLabel);
+    });
+
+    const hasCreds = {{ 'true' if env.mkg_base_url else 'false' }};
+    _updateBtnLabel();
+
     if (hasCreds) {
-        setStepDone(1);
-        openStep(2);
+        // Auto-run all 3 checks; collapse each step that passes
+        await autoCheckStep1();
+        await autoCheckStep2();
+        await autoCheckStep3();
     } else {
         openStep(1);
     }
     refreshStepper();
     checkAllDone();
+}
+
+async function autoCheckStep1() {
+    const result = document.getElementById('testResult1');
+    showResult(result, 'warn', 'Verbinding controleren…');
+    openStep(1);
+    try {
+        const data = await (await fetch('/api/onboarding/test-saved-connection', {method:'POST'})).json();
+        if (data.success) {
+            showResult(result, 'ok', data.message);
+            setStepDone(1);   // collapses automatically
+        } else {
+            showResult(result, 'err', data.message);
+            openStep(1);
+        }
+    } catch (e) {
+        showResult(result, 'err', 'Netwerkfout: ' + e.message);
+        openStep(1);
+    }
+}
+
+async function autoCheckStep2() {
+    const res = document.getElementById('ldmResult');
+    showResult(res, 'warn', 'LDM controleren…');
+    openStep(2);
+    try {
+        const data = await (await fetch('/api/onboarding/verify-ldm', {method:'POST'})).json();
+        if (data.success === true) {
+            showResult(res, 'ok', data.message);
+            setStepDone(2);
+        } else if (data.success === null) {
+            showResult(res, 'warn', data.message);
+            // Cannot verify — leave open so user can see the warning
+        } else {
+            showResult(res, 'err', data.message);
+            openStep(2);
+        }
+    } catch (e) {
+        showResult(res, 'err', 'Netwerkfout: ' + e.message);
+    }
+}
+
+async function autoCheckStep3() {
+    const res = document.getElementById('webhookResult');
+    showResult(res, 'warn', 'Webhook controleren…');
+    openStep(3);
+    try {
+        const data = await (await fetch('/api/onboarding/verify-webhook', {method:'POST'})).json();
+        if (data.success === true) {
+            showResult(res, 'ok', data.message);
+            setStepDone(3);
+        } else if (data.success === null) {
+            // Expected 403 — webhook can't be verified, that's OK
+            showResult(res, 'warn', data.message);
+            setStepDone(3);   // mark done so wizard doesn't block on this
+        } else {
+            showResult(res, 'err', data.message);
+        }
+    } catch (e) {
+        showResult(res, 'err', 'Netwerkfout: ' + e.message);
+    }
 }
 
 function openStep(n)   { document.getElementById(`stepCard${n}`).classList.remove('is-collapsed'); }
@@ -577,19 +685,53 @@ async function testConnection() {
     const key    = document.getElementById('ob_api_key').value.trim();
     const user   = document.getElementById('ob_username').value.trim();
     const pass   = document.getElementById('ob_password').value;
-    if (!base || !user) { showResult(result, 'err', 'Vul minimaal de basis-URL en gebruikersnaam in.'); return; }
+
+    if (!base || !user) {
+        showResult(result, 'err', 'Vul minimaal de basis-URL en gebruikersnaam in.');
+        return;
+    }
+
+    const hasCreds  = {{ 'true' if env.mkg_base_url else 'false' }};
+    const saveMode  = !hasCreds || _hasChanges();
+
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Verbinding testen…';
+    btn.innerHTML = '<span class="spinner"></span> ' + (saveMode ? 'Opslaan en testen…' : 'Verbinding testen…');
+
     try {
-        const resp = await fetch('/api/onboarding/test-connection', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mkg_base_url: base, mkg_context_path: ctx, mkg_api_key: key, mkg_username: user, mkg_password: pass, save_on_success: true }),
-        });
-        const data = await resp.json();
-        if (data.success) { showResult(result, 'ok', data.message); setTimeout(() => { setStepDone(1); openStep(2); }, 900); }
-        else showResult(result, 'err', data.message);
-    } catch (e) { showResult(result, 'err', 'Netwerkfout: ' + e.message); }
-    finally { btn.disabled = false; btn.innerHTML = 'Verbinding testen &amp; opslaan'; }
+        let data;
+        if (saveMode) {
+            // Changes detected → save first, then test
+            const resp = await fetch('/api/onboarding/test-connection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    mkg_base_url: base, mkg_context_path: ctx, mkg_api_key: key,
+                    mkg_username: user, mkg_password: pass, save_on_success: true,
+                }),
+            });
+            data = await resp.json();
+            if (data.success) {
+                // Update originals so button reverts to "Verbinding testen"
+                _captureOriginals();
+                document.getElementById('ob_password').value = '';
+            }
+        } else {
+            // Nothing changed → just test with saved credentials (no save)
+            data = await (await fetch('/api/onboarding/test-saved-connection', {method:'POST'})).json();
+        }
+
+        if (data.success) {
+            showResult(result, 'ok', data.message);
+            setTimeout(() => { setStepDone(1); openStep(2); }, 900);
+        } else {
+            showResult(result, 'err', data.message);
+        }
+    } catch (e) {
+        showResult(result, 'err', 'Netwerkfout: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        _updateBtnLabel();
+    }
 }
 
 async function verifyLdm() {

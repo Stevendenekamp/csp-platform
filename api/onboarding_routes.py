@@ -314,19 +314,170 @@ async def verify_ldm(
         })
 
 
+@router.post("/test-saved-connection")
+async def test_saved_connection(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Test the MKG connection using the credentials already saved in the database.
+    Does NOT save anything — purely a connectivity check.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Niet ingelogd")
+
+    env = _get_or_create_env(current_user, db)
+    if not env.mkg_base_url or not env.mkg_username:
+        return JSONResponse({
+            "success": False,
+            "message": "MKG koppeling nog niet ingesteld.",
+        })
+
+    from auth.security import decrypt_secret
+    password = ""
+    if env.mkg_password_enc:
+        try:
+            password = decrypt_secret(env.mkg_password_enc)
+        except Exception:
+            pass
+
+    base_url     = env.mkg_base_url.rstrip("/")
+    context_path = (env.mkg_context_path or "/mkg").strip()
+    extra_headers: dict = {"Accept": "application/json"}
+    if env.mkg_api_key:
+        extra_headers["X-CustomerID"] = env.mkg_api_key
+
+    login_url = f"{base_url}{context_path}/static/auth/j_spring_security_check"
+    user_url  = f"{base_url}{context_path}/web/v3/MKG/User"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            login_resp = await client.post(
+                login_url,
+                data={"j_username": env.mkg_username, "j_password": password},
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    **({"X-CustomerID": env.mkg_api_key} if env.mkg_api_key else {}),
+                },
+            )
+            jsessionid = login_resp.cookies.get("JSESSIONID")
+            if not jsessionid:
+                return JSONResponse({
+                    "success": False,
+                    "message": f"Login mislukt (HTTP {login_resp.status_code}). Controleer de MKG inloggegevens.",
+                })
+
+            user_resp = await client.get(
+                user_url,
+                params={"FieldList": "gebr_code,gebr_naam"},
+                cookies={"JSESSIONID": jsessionid},
+                headers=extra_headers,
+            )
+            if user_resp.status_code == 200:
+                return JSONResponse({
+                    "success": True,
+                    "message": "Verbinding actief — opgeslagen inloggegevens werken correct.",
+                })
+            return JSONResponse({
+                "success": False,
+                "message": f"Verbinding mislukt (HTTP {user_resp.status_code}).",
+            })
+
+    except httpx.ConnectError:
+        return JSONResponse({"success": False, "message": "Kan geen verbinding maken met de MKG server."})
+    except httpx.TimeoutException:
+        return JSONResponse({"success": False, "message": "Verbinding verlopen (timeout 15 s)."})
+    except Exception as exc:
+        logger.error(f"MKG test-saved-connection error: {exc}")
+        return JSONResponse({"success": False, "message": f"Onverwachte fout: {exc}"})
+
+
 @router.post("/verify-webhook")
 async def verify_webhook(
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """Verify that the webhook is correctly configured in MKG.
-    API call details will be added once provided.
+    """Verify that the webhook endpoint is reachable in MKG.
+    A 403 response means the endpoint exists but this user has no access —
+    that is expected and returned as success=None (cannot be verified).
     """
     if not current_user:
         raise HTTPException(status_code=401, detail="Niet ingelogd")
 
-    # TODO: implement once API call details are provided
-    return JSONResponse({
-        "success": None,
-        "message": "Webhook-verificatie wordt geconfigureerd zodra de API-details beschikbaar zijn.",
-    })
+    env = _get_or_create_env(current_user, db)
+    if not env.mkg_base_url or not env.mkg_username:
+        return JSONResponse({
+            "success": False,
+            "message": "MKG koppeling nog niet ingesteld. Voltooi eerst stap 1.",
+        })
+
+    from auth.security import decrypt_secret
+    password = ""
+    if env.mkg_password_enc:
+        try:
+            password = decrypt_secret(env.mkg_password_enc)
+        except Exception:
+            pass
+
+    base_url     = env.mkg_base_url.rstrip("/")
+    context_path = (env.mkg_context_path or "/mkg").strip()
+    extra_headers: dict = {"Accept": "application/json"}
+    if env.mkg_api_key:
+        extra_headers["X-CustomerID"] = env.mkg_api_key
+
+    login_url  = f"{base_url}{context_path}/static/auth/j_spring_security_check"
+    webh_url   = f"{base_url}{context_path}/web/v3/MKG/Documents/webh"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            login_resp = await client.post(
+                login_url,
+                data={"j_username": env.mkg_username, "j_password": password},
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    **({"X-CustomerID": env.mkg_api_key} if env.mkg_api_key else {}),
+                },
+            )
+            jsessionid = login_resp.cookies.get("JSESSIONID")
+            if not jsessionid:
+                return JSONResponse({
+                    "success": False,
+                    "message": f"Login mislukt (HTTP {login_resp.status_code}). Controleer de MKG inloggegevens.",
+                })
+
+            webh_resp = await client.get(
+                webh_url,
+                cookies={"JSESSIONID": jsessionid},
+                headers=extra_headers,
+            )
+            logger.info(f"MKG verify-webhook → {webh_resp.status_code}")
+
+            if webh_resp.status_code == 403:
+                return JSONResponse({
+                    "success": None,
+                    "message": (
+                        "Webhook-endpoint bereikbaar, maar uw MKG-gebruiker heeft geen leesrechten "
+                        "op dit endpoint. De webhook-configuratie kan niet automatisch worden "
+                        "gecontroleerd — volg de handmatige stappen hierboven."
+                    ),
+                })
+
+            if webh_resp.status_code == 200:
+                return JSONResponse({
+                    "success": True,
+                    "message": "Webhook-endpoint bereikbaar en toegankelijk.",
+                })
+
+            return JSONResponse({
+                "success": False,
+                "message": f"Onverwachte status van MKG webhook-endpoint: HTTP {webh_resp.status_code}.",
+            })
+
+    except httpx.ConnectError:
+        return JSONResponse({"success": False, "message": "Kan geen verbinding maken met de MKG server."})
+    except httpx.TimeoutException:
+        return JSONResponse({"success": False, "message": "Verbinding verlopen (timeout 15 s)."})
+    except Exception as exc:
+        logger.error(f"MKG verify-webhook error: {exc}")
+        return JSONResponse({"success": False, "message": f"Onverwachte fout: {exc}"})

@@ -226,12 +226,15 @@ async def verify_ldm(
                 })
 
             # Fetch LDM record
+            # Build URL manually: httpx params-dict would percent-encode '=' in the
+            # filter value (udof_naam=prmv) as '%3D', which MKG does not accept.
+            ldm_full_url = (
+                f"{ldm_url}"
+                f"?filter=udof_naam%3Dprmv%20and%20sdoc_num%3D242"
+                f"&fieldlist=udof_bron,udof_bron_query,udof_type"
+            )
             ldm_resp = await client.get(
-                ldm_url,
-                params={
-                    "filter": "udof_naam=prmv and sdoc_num=242",
-                    "fieldlist": "udof_bron,udof_bron_query,udof_type",
-                },
+                ldm_full_url,
                 cookies={"JSESSIONID": jsessionid},
                 headers=extra_headers,
             )

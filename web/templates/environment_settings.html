@@ -522,12 +522,10 @@ function copyWebhook() {
 let doneSteps = new Set();
 
 function initOnboarding() {
-    const saved = JSON.parse(localStorage.getItem('csp_ob_done') || '[]');
-    saved.forEach(n => { if (n === 2 || n === 3) setStepDone(n); });
     const hasCreds = {{ 'true' if env.mkg_base_url else 'false' }};
     if (hasCreds) {
         setStepDone(1);
-        if (!doneSteps.has(2)) openStep(2);
+        openStep(2);
     } else {
         openStep(1);
     }
@@ -550,10 +548,6 @@ function setStepDone(n) {
     card.classList.add('is-collapsed');
     refreshStepper();
     checkAllDone();
-    if (n === 2 || n === 3) {
-        const arr = Array.from(doneSteps).filter(x => x === 2 || x === 3);
-        localStorage.setItem('csp_ob_done', JSON.stringify(arr));
-    }
 }
 
 function markDone(n) {

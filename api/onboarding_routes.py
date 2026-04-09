@@ -226,8 +226,8 @@ async def verify_ldm(
                 })
 
             # Fetch LDM record
-            # Build URL manually: httpx params-dict would percent-encode '=' in the
-            # filter value (udof_naam=prmv) as '%3D', which MKG does not accept.
+            # Build URL manually to control filter encoding exactly as MKG expects.
+            # %3D for '=' and %20 for spaces work correctly; '+' for spaces does NOT.
             ldm_full_url = (
                 f"{ldm_url}"
                 f"?filter=udof_naam%3Dprmv%20and%20sdoc_num%3D242"
@@ -257,7 +257,11 @@ async def verify_ldm(
                 })
 
             data = ldm_resp.json()
-            records = data.get("udof", [])
+            # Response structuur: {"response":{"ResultData":[{"udof":[...]}]}}
+            try:
+                records = data["response"]["ResultData"][0].get("udof", [])
+            except (KeyError, IndexError, TypeError):
+                records = data.get("udof", [])
             if not records:
                 return JSONResponse({
                     "success": False,

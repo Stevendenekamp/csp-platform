@@ -102,7 +102,11 @@ class CuttingPlan(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("material_orders.id"), unique=True)
-    status = Column(Enum(OptimizationStatus, create_type=False), default=OptimizationStatus.PENDING)
+    status = Column(
+        Enum(OptimizationStatus, create_type=False,
+             values_callable=lambda obj: [e.value for e in obj]),
+        default=OptimizationStatus.PENDING,
+    )
     total_stock_used = Column(Integer)
     total_waste = Column(Float)
     waste_percentage = Column(Float)
